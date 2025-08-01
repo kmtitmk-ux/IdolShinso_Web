@@ -9,11 +9,11 @@ and "delete" any "Todo" records.
 const schema = a.schema({
   IS01: a.model({
     title: a.string(),
-    comments: a.hasMany('IS02', 'postId')
+    comments: a.hasMany('IS02', ['postId']),
   }).authorization((allow) => [allow.guest()]),
   IS02: a.model({
-    content: a.string(),
-    post: a.belongsTo('IS01', 'postId')
+    postId: a.string(),
+    post: a.belongsTo('IS01', ['postId']),
   }).authorization((allow) => [allow.guest()]),
 });
 
