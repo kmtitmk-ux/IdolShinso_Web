@@ -6,7 +6,7 @@ export const handler: Handler = async (event: any) => {
     const url = 'https://c-ute.doorblog.jp/';
     const res = await axios.get(url);
     const $ = cheerio.load(res.data);
-    const titles = $('div[title="apple"]');
+    const titles = $('div[title="個別記事ページへ"]') ?? [];
     for (const el of titles) {
         const link = $(el).attr('href') as string;
         await scrapingContent(link);
