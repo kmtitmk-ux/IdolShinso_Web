@@ -1,3 +1,4 @@
+# 最初に実行（ローカル検証）
 npx aws-cdk bootstrap aws://117880326767/ap-northeast-1
 
 # サンドボックス起動（ローカル検証）
