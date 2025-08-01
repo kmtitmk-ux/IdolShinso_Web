@@ -24,8 +24,9 @@ async function scrapingContent(link: string) {
     // const content = $('.article-body.entry-content')[0];
     const ths = $('.t_h');
     const tds = $('.t_b');
-    console.log(ths);
-    console.log(tds);
+    for (const v of tds) {
+        console.log($(v).html());
+    }
     const results: string[] = [];
     return results;
 }
