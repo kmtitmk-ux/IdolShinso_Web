@@ -12,7 +12,8 @@
     "@aws-sdk/client-dynamodb": "^3.858.0",
     "@aws-sdk/lib-dynamodb": "^3.858.0",
     "axios": "^1.11.0",
-    "cheerio": "^1.1.0"
+    "cheerio": "^1.1.0",
+    "dayjs": "^1.11.13"
   },
   "devDependencies": {
     "@types/cheerio": "^0.22.35"
