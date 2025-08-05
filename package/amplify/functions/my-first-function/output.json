@@ -1,0 +1,17 @@
+{
+    "errorType": "AccessDeniedException",
+    "errorMessage": "User: arn:aws:sts::117880326767:assumed-role/amplify-modernizenextfree-myfirstfunctionlambdaServ-Mr0fhf89GHqP/amplify-modernizenextfree-myfirstfunctionlambdaF5A-IC6TcxhJKMA2 is not authorized to perform: dynamodb:PutItem on resource: arn:aws:dynamodb:ap-northeast-1:117880326767:table/IS01 because no identity-based policy allows the dynamodb:PutItem action",
+    "trace": [
+        "AccessDeniedException: User: arn:aws:sts::117880326767:assumed-role/amplify-modernizenextfree-myfirstfunctionlambdaServ-Mr0fhf89GHqP/amplify-modernizenextfree-myfirstfunctionlambdaF5A-IC6TcxhJKMA2 is not authorized to perform: dynamodb:PutItem on resource: arn:aws:dynamodb:ap-northeast-1:117880326767:table/IS01 because no identity-based policy allows the dynamodb:PutItem action",
+        "    at throwDefaultError (file:///var/task/index.mjs:31:16198)",
+        "    at file:///var/task/index.mjs:31:16365",
+        "    at de_CommandError (file:///var/task/index.mjs:52:54190)",
+        "    at process.processTicksAndRejections (node:internal/process/task_queues:95:5)",
+        "    at async file:///var/task/index.mjs:3:1147",
+        "    at async file:///var/task/index.mjs:52:135672",
+        "    at async file:///var/task/index.mjs:4:1919",
+        "    at async file:///var/task/index.mjs:38:41080",
+        "    at async file:///var/task/index.mjs:2:22658",
+        "    at async FYe (file:///var/task/index.mjs:204:190973)"
+    ]
+}

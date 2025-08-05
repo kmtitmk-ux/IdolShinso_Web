@@ -7,21 +7,28 @@ specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
-  IS01: a.model({
-    title: a.string(),
-    comments: a.hasMany('IS02', ['postId']),
-    categories: a.hasMany('IS03', ['postId'])
-  }).authorization((allow) => [allow.guest()]),
-  IS02: a.model({
-    postId: a.string(),
-    post: a.belongsTo('IS01', ['postId']),
-    content: a.string(),
-  }).authorization((allow) => [allow.guest()]),
-  IS03: a.model({
-    postId: a.string(),
-    post: a.belongsTo('IS01', ['postId']),
-    category: a.string(),
-  }).authorization((allow) => [allow.guest()]),
+  IS01: a
+    .model({
+      title: a.string().required(),
+      comments: a.hasMany('IS02', ['postId']),
+      categories: a.hasMany('IS03', ['postId'])
+    })
+    .secondaryIndexes((index) => [index("title")])
+    .authorization((allow) => [allow.guest()]),
+  IS02: a
+    .model({
+      postId: a.string(),
+      post: a.belongsTo('IS01', ['postId']),
+      content: a.string(),
+    })
+    .authorization((allow) => [allow.guest()]),
+  IS03: a
+    .model({
+      postId: a.string(),
+      post: a.belongsTo('IS01', ['postId']),
+      category: a.string(),
+    })
+    .authorization((allow) => [allow.guest()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
