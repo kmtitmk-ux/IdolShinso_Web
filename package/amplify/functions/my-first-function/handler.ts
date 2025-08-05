@@ -16,15 +16,13 @@ import dayjs from "dayjs";
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
+type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'head' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
 type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'category'> & { __typename: 'IS03'; };
+
 export const handler: Handler = async (event: any) => {
-    console.log("event", event);
     const pstId = uuidv4();
-    console.log("pstId", pstId);
     const commentId = uuidv4();
-    console.log("commentId", commentId);
     const url = 'https://c-ute.doorblog.jp/';
     const res = await axios.get(url);
     const $ = cheerio.load(res.data);
@@ -35,11 +33,9 @@ export const handler: Handler = async (event: any) => {
             const href = $(el).attr('href') as string;
             if (href) hrefs.push(href);
             const text = $(el).text();
-            console.log(`リンク${i}: ${text} (${href})`);
         }
     });
     await Promise.all(hrefs.map(href => scrapingContent(href)));
-
     return {
         statusCode: 200,
         body: ""
@@ -55,6 +51,7 @@ async function scrapingContent(link: string) {
     const postId = uuidv4();
     const title = $('a[title="個別記事ページへ"]').text()?.trim() as string;
 
+    // タイトルの重複チェック、ページ作成
     const result = await docClient.send(new QueryCommand({
         TableName: tableName01,
         IndexName: "iS01sByTitle",
@@ -64,7 +61,6 @@ async function scrapingContent(link: string) {
     }));
     console.log("result", JSON.stringify(result));
 
-    // IS01 の作成（DynamoDB SDK）
     const transactWriteParams: TransactWriteCommandInput = { TransactItems: [] };
     (transactWriteParams.TransactItems ?? []).push({
         Put: {
@@ -79,10 +75,19 @@ async function scrapingContent(link: string) {
         },
     });
 
+    // カテゴリーの取得
     const cats = $('a[title="カテゴリアーカイブへ"]');
-    cats.each((i, el) => {
+    const promises = cats.map(async (i, el) => {
         const category = $(el).text()?.trim() as string;
         if (category && !category.includes("カテゴリの全記事一覧")) {
+            const result = await docClient.send(new QueryCommand({
+                TableName: tableName03,
+                IndexName: "iS03sByCategory",
+                KeyConditionExpression: "#pk = :categoryValue",
+                ExpressionAttributeNames: { "#pk": "category" },
+                ExpressionAttributeValues: { ":categoryValue": category }
+            }));
+            console.log("result", JSON.stringify(result));
             (transactWriteParams.TransactItems ?? []).push({
                 Put: {
                     TableName: tableName03,
@@ -96,22 +101,25 @@ async function scrapingContent(link: string) {
             });
         }
     });
-    console.log(JSON.stringify(transactWriteParams));
+    await Promise.all(promises);
+    console.info("TransactWrite params", JSON.stringify(transactWriteParams));
     await docClient.send(new TransactWriteCommand(transactWriteParams));
 
+    // コメントの取得
     const ths = $('.t_h');
     const tds = $('.t_b');
     const is02Items: IS02Input[] = [];
     tds.each((i, el) => {
-        const th = $(ths[i]).html()?.trim().replace(/.*gray;"> | 0<\/span>|\(.*?\)/g, "");
-        console.log("th", th);
+        const date = $(ths[i]).html()?.trim().replace(/.*gray;"> | 0<\/span>|\(.*?\)/g, "");
+        const head = $(ths[i]).text()?.trim();
         const content = $(el).html()?.trim();
         if (content) {
             is02Items.push({
                 id: uuidv4(),
                 content,
                 postId: postId,
-                createdAt: dayjs(th).isValid() ? dayjs(th).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                head,
+                createdAt: dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"
             } as IS02Input);
@@ -130,11 +138,9 @@ async function scrapingContent(link: string) {
             })),
         },
     }));
-    console.log("putRequestsArray", JSON.stringify(putRequestsArray));
-
     const results: string[] = [];
     for (const params of putRequestsArray) {
-        console.log("params", JSON.stringify(params));
+        console.log("BatchWrite params", JSON.stringify(params));
         await docClient.send(new BatchWriteCommand(params));
     }
     return results;
