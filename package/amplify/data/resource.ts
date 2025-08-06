@@ -10,7 +10,7 @@ const schema = a.schema({
   IS01: a
     .model({
       title: a.string().required(),
-      head: a.string(),
+      header: a.string(),
       comments: a.hasMany('IS02', ['postId']),
       categories: a.hasMany('IS03', ['postId'])
     })

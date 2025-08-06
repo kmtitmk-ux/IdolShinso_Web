@@ -2,9 +2,11 @@
 import { baselightTheme } from "@/utils/theme/DefaultColors";
 import { ThemeProvider } from "@mui/material/styles";
 import CssBaseline from "@mui/material/CssBaseline";
-import './global.css'
+import './global.css';
+import { Amplify } from 'aws-amplify';
+import outputs from '@/amplify_outputs.json';
 
-
+Amplify.configure(outputs);
 export default function RootLayout({
   children,
 }: {

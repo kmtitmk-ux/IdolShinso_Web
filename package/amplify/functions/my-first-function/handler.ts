@@ -16,7 +16,7 @@ import dayjs from "dayjs";
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'head' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
+type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
 type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'category'> & { __typename: 'IS03'; };
 
@@ -111,14 +111,14 @@ async function scrapingContent(link: string) {
     const is02Items: IS02Input[] = [];
     tds.each((i, el) => {
         const date = $(ths[i]).html()?.trim().replace(/.*gray;"> | 0<\/span>|\(.*?\)/g, "");
-        const head = $(ths[i]).text()?.trim();
+        const header = $(ths[i]).text()?.trim();
         const content = $(el).html()?.trim();
         if (content) {
             is02Items.push({
                 id: uuidv4(),
                 content,
                 postId: postId,
-                head,
+                header,
                 createdAt: dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"
