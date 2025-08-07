@@ -17,11 +17,16 @@ import { Stack } from "@mui/system";
 import { IconBasket } from "@tabler/icons-react";
 import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
 import Image from "next/image";
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
-import { useEffect } from "react";
 
-const client = generateClient<Schema>();
+import { type Schema } from '@/amplify/data/resource';
+import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
+import outputs from '@/amplify_outputs.json';
+import { cookies } from 'next/headers';
+
+export const cookieBasedClient = generateServerClientUsingCookies<Schema>({
+    config: outputs,
+    cookies,
+});
 
 const ecoCard = [
     {
@@ -91,20 +96,12 @@ const ecoCard = [
 ];
 
 const Blog = () => {
-    const fetchData = async () => {
-        try {
-            // const todos = await client.models.IS01.list();
-            // const { data: todos, errors } = await client.models.IS01.list();
-            const data = await client.models.IS01.list();
-            // const data = await client.models.IS01.get({ id: "023f089b-b0f0-47e4-a877-ce182dc9d2da" });
-            console.log(data);
-        } catch (error) {
-            console.error("Error fetching data:", error);
-        }
+    const fetchTodos = async () => {
+        const data = await cookieBasedClient.models.IS01.list();
+        console.log(data);
     };
-    useEffect(() => {
-        fetchData();
-    }, []);
+
+    fetchTodos();
 
     return (
         <Grid container spacing={3}>
