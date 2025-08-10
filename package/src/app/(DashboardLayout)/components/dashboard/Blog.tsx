@@ -1,4 +1,3 @@
-
 import Link from "next/link";
 import {
     CardContent,
@@ -22,11 +21,18 @@ import { type Schema } from '@/amplify/data/resource';
 import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
 import outputs from '@/amplify_outputs.json';
 import { cookies } from 'next/headers';
+import { generateClient } from 'aws-amplify/data';
+import { Amplify } from 'aws-amplify';
 
-export const cookieBasedClient = generateServerClientUsingCookies<Schema>({
+Amplify.configure(outputs);
+
+
+export const serverClient = generateServerClientUsingCookies<Schema>({
     config: outputs,
     cookies,
 });
+
+// const client = generateClient<Schema>();
 
 const ecoCard = [
     {
@@ -97,8 +103,19 @@ const ecoCard = [
 
 const Blog = () => {
     const fetchTodos = async () => {
-        const data = await cookieBasedClient.models.IS01.list();
-        console.log(data);
+        try {
+            const data = await serverClient.models.IS02.list();
+            console.log("Fetched data:", data);
+            // console.log("Errors:", errors);
+            // if (errors) {
+            //     console.error("データ取得エラー:", errors);
+            //     return [];
+            // }
+            return data || [];
+        } catch (error) {
+            console.error("データ取得中にエラーが発生しました:", error);
+            return [];
+        }
     };
 
     fetchTodos();

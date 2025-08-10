@@ -7,39 +7,42 @@ specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
-  IS01: a
-    .model({
-      title: a.string().required(),
-      header: a.string(),
-      comments: a.hasMany('IS02', ['postId']),
-      categories: a.hasMany('IS03', ['postId'])
-    })
-    .secondaryIndexes((index) => [index("title")])
-    .authorization((allow) => [allow.guest()]),
-  IS02: a
-    .model({
-      postId: a.string(),
-      post: a.belongsTo('IS01', ['postId']),
-      content: a.string(),
-    })
-    .authorization((allow) => [allow.guest()]),
-  IS03: a
-    .model({
-      postId: a.string(),
-      post: a.belongsTo('IS01', ['postId']),
-      category: a.string(),
-    })
-    .secondaryIndexes((index) => [index("category")])
-    .authorization((allow) => [allow.guest()]),
+    IS01: a
+        .model({
+            title: a.string().required(),
+            header: a.string(),
+            comments: a.hasMany('IS02', ['postId']),
+            categories: a.hasMany('IS03', ['postId'])
+        })
+        .secondaryIndexes((index) => [index("title")])
+        .authorization((allow) => [
+            allow.guest().to(['read']), // 認証なしで読み込み許可
+            allow.authenticated().to(['create', 'update', 'delete', 'read'])
+        ]),
+    IS02: a
+        .model({
+            postId: a.string(),
+            post: a.belongsTo('IS01', ['postId']),
+            content: a.string(),
+        })
+        .authorization((allow) => [allow.guest()]),
+    IS03: a
+        .model({
+            postId: a.string(),
+            post: a.belongsTo('IS01', ['postId']),
+            category: a.string(),
+        })
+        .secondaryIndexes((index) => [index("category")])
+        .authorization((allow) => [allow.guest()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
 
 export const data = defineData({
-  schema,
-  authorizationModes: {
-    defaultAuthorizationMode: 'identityPool',
-  },
+    schema,
+    authorizationModes: {
+        defaultAuthorizationMode: 'identityPool',
+    },
 });
 
 /*== STEP 2 ===============================================================
