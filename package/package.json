@@ -21,6 +21,7 @@
     "@types/node": "^20.2.3",
     "apexcharts": "4.7.0",
     "aws-amplify": "^6.15.5",
+    "dayjs": "^1.11.13",
     "eslint": "8.46.0",
     "eslint-config-next": "13.4.12",
     "lodash": "^4.17.21",

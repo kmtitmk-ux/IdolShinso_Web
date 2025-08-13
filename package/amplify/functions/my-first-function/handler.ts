@@ -18,7 +18,7 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
-type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'category'> & { __typename: 'IS03'; };
+type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'name'> & { __typename: 'IS03'; };
 
 export const handler: Handler = async (event: any) => {
     const pstId = uuidv4();
@@ -78,14 +78,14 @@ async function scrapingContent(link: string) {
     // カテゴリーの取得
     const cats = $('a[title="カテゴリアーカイブへ"]');
     const promises = cats.map(async (i, el) => {
-        const category = $(el).text()?.trim() as string;
-        if (category && !category.includes("カテゴリの全記事一覧")) {
+        const name = $(el).text()?.trim() as string;
+        if (name && !name.includes("カテゴリの全記事一覧")) {
             const result = await docClient.send(new QueryCommand({
                 TableName: tableName03,
-                IndexName: "iS03sByCategory",
-                KeyConditionExpression: "#pk = :categoryValue",
-                ExpressionAttributeNames: { "#pk": "category" },
-                ExpressionAttributeValues: { ":categoryValue": category }
+                IndexName: "iS03sByName",
+                KeyConditionExpression: "#pk = :nameValue",
+                ExpressionAttributeNames: { "#pk": "name" },
+                ExpressionAttributeValues: { ":nameValue": name }
             }));
             console.log("result", JSON.stringify(result));
             (transactWriteParams.TransactItems ?? []).push({
@@ -94,7 +94,7 @@ async function scrapingContent(link: string) {
                     Item: {
                         id: uuidv4(),
                         postId,
-                        category,
+                        name,
                         __typename: "IS03"
                     } as IS03Input,
                 },

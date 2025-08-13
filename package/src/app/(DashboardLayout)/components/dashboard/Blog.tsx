@@ -15,114 +15,95 @@ import {
 import { Stack } from "@mui/system";
 import { IconBasket } from "@tabler/icons-react";
 import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
+import { serverClient } from "@/utils/serverClient";
 import Image from "next/image";
-
-import { type Schema } from '@/amplify/data/resource';
-import { generateServerClientUsingCookies } from '@aws-amplify/adapter-nextjs/data';
-import outputs from '@/amplify_outputs.json';
-import { cookies } from 'next/headers';
-import { generateClient } from 'aws-amplify/data';
-import { Amplify } from 'aws-amplify';
-
-Amplify.configure(outputs);
-
-
-export const serverClient = generateServerClientUsingCookies<Schema>({
-    config: outputs,
-    cookies,
-});
+import dayjs from 'dayjs';
 
 // const client = generateClient<Schema>();
 
-const ecoCard = [
-    {
-        title: "Boat Headphone",
-        slug: "September 14, 2023",
-        photo: '/images/products/s4.jpg',
-        salesPrice: 375,
-        price: 285,
-        rating: 4,
-    },
-    {
-        title: "MacBook Air Pro",
-        slug: "September 14, 2023",
-        photo: '/images/products/s5.jpg',
-        salesPrice: 650,
-        price: 900,
-        rating: 5,
-    },
-    {
-        title: "Red Valvet Dress",
-        slug: "September 14, 2023",
-        photo: '/images/products/s7.jpg',
-        salesPrice: 150,
-        price: 200,
-        rating: 3,
-    },
-    {
-        title: "Cute Soft Teddybear",
-        slug: "September 14, 2023",
-        photo: '/images/products/s11.jpg',
-        salesPrice: 285,
-        price: 345,
-        rating: 2,
-    },
-    {
-        title: "Boat Headphone",
-        slug: "September 14, 2023",
-        photo: '/images/products/s4.jpg',
-        salesPrice: 375,
-        price: 285,
-        rating: 4,
-    },
-    {
-        title: "MacBook Air Pro",
-        slug: "September 14, 2023",
-        photo: '/images/products/s5.jpg',
-        salesPrice: 650,
-        price: 900,
-        rating: 5,
-    },
-    {
-        title: "Red Valvet Dress",
-        slug: "September 14, 2023",
-        photo: '/images/products/s7.jpg',
-        salesPrice: 150,
-        price: 200,
-        rating: 3,
-    },
-    {
-        title: "Cute Soft Teddybear",
-        slug: "September 14, 2023",
-        photo: '/images/products/s11.jpg',
-        salesPrice: 285,
-        price: 345,
-        rating: 2,
-    },
-];
+// const ecoCard = [
+//     {
+//         title: "Boat Headphone",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s4.jpg',
+//         salesPrice: 375,
+//         price: 285,
+//         rating: 4,
+//     },
+//     {
+//         title: "MacBook Air Pro",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s5.jpg',
+//         salesPrice: 650,
+//         price: 900,
+//         rating: 5,
+//     },
+//     {
+//         title: "Red Valvet Dress",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s7.jpg',
+//         salesPrice: 150,
+//         price: 200,
+//         rating: 3,
+//     },
+//     {
+//         title: "Cute Soft Teddybear",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s11.jpg',
+//         salesPrice: 285,
+//         price: 345,
+//         rating: 2,
+//     },
+//     {
+//         title: "Boat Headphone",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s4.jpg',
+//         salesPrice: 375,
+//         price: 285,
+//         rating: 4,
+//     },
+//     {
+//         title: "MacBook Air Pro",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s5.jpg',
+//         salesPrice: 650,
+//         price: 900,
+//         rating: 5,
+//     },
+//     {
+//         title: "Red Valvet Dress",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s7.jpg',
+//         salesPrice: 150,
+//         price: 200,
+//         rating: 3,
+//     },
+//     {
+//         title: "Cute Soft Teddybear",
+//         slug: "September 14, 2023",
+//         photo: '/images/products/s11.jpg',
+//         salesPrice: 285,
+//         price: 345,
+//         rating: 2,
+//     }
+// ];
 
-const Blog = () => {
-    const fetchTodos = async () => {
-        try {
-            const data = await serverClient.models.IS02.list();
-            console.log("Fetched data:", data);
-            // console.log("Errors:", errors);
-            // if (errors) {
-            //     console.error("データ取得エラー:", errors);
-            //     return [];
-            // }
-            return data || [];
-        } catch (error) {
-            console.error("データ取得中にエラーが発生しました:", error);
-            return [];
-        }
-    };
 
-    fetchTodos();
-
+const Blog = async () => {
+    const { data } = await serverClient.models.IS01.list({
+        selectionSet: [
+            "id",
+            "title",
+            "createdAt",
+            "categories.id",
+            "categories.name"
+        ]
+    });
+    console.info("fetch data:", data[0].categories);
+    const ecoCard: any[] = [];
     return (
         <Grid container spacing={3}>
-            {ecoCard.map((product, index) => (
+            {data?.map((product: any, index: number) => (
                 <Grid
                     key={index}
                     size={{
@@ -132,13 +113,13 @@ const Blog = () => {
                     }}>
                     <BlankCard>
                         <Typography component={Link} href={`/posts/${product.slug}`}>
-                            <Avatar
+                            {/* <Avatar
                                 src={product.photo} variant="square"
                                 sx={{
                                     height: 250,
                                     width: '100%',
                                 }}
-                            />
+                            /> */}
                         </Typography>
                         {/* <Tooltip title="Add To Cart">
                             <Fab
@@ -158,14 +139,14 @@ const Blog = () => {
                                 mt={1}
                             >
                                 <Stack direction="row" alignItems="center">
-                                    <Typography variant="h6">${product.price}</Typography>
-                                    <Typography
+                                    <Typography variant="h6">{dayjs(product.createdAt).format("YYYY/MM/DD")}</Typography>
+                                    {/* <Typography
                                         color="textSecondary"
                                         ml={1}
                                         sx={{ textDecoration: "line-through" }}
                                     >
-                                        ${product.salesPrice}
-                                    </Typography>
+                                        {product.createdAt}
+                                    </Typography> */}
                                 </Stack>
                                 <Rating
                                     name="read-only"

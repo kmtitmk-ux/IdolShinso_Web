@@ -15,10 +15,11 @@ const schema = a.schema({
             categories: a.hasMany('IS03', ['postId'])
         })
         .secondaryIndexes((index) => [index("title")])
-        .authorization((allow) => [
-            allow.guest().to(['read']), // 認証なしで読み込み許可
-            allow.authenticated().to(['create', 'update', 'delete', 'read'])
-        ]),
+        .authorization((allow) => [allow.guest()]),
+    // .authorization((allow) => [
+    //     allow.guest().to(['read']), // 認証なしで読み込み許可
+    //     allow.authenticated().to(['create', 'update', 'delete', 'read'])
+    // ]),
     IS02: a
         .model({
             postId: a.string(),
@@ -30,9 +31,9 @@ const schema = a.schema({
         .model({
             postId: a.string(),
             post: a.belongsTo('IS01', ['postId']),
-            category: a.string(),
+            name: a.string(),
         })
-        .secondaryIndexes((index) => [index("category")])
+        .secondaryIndexes((index) => [index("name")])
         .authorization((allow) => [allow.guest()]),
 });
 

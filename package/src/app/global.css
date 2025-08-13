@@ -1,3 +1,10 @@
-*{
+* {
      font-family: 'Plus Jakarta Sans', Helvetica, Arial, sans-serif !important;
+}
+
+
+@media (min-width: 1120px) {
+     .pageWrapper {
+          margin-left: 270px;
+     }
 }
