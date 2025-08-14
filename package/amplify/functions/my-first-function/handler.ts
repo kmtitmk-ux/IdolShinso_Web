@@ -7,6 +7,8 @@ import {
     TransactWriteCommandInput,
     DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
+const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3ServiceException } = require("@aws-sdk/client-s3");
+
 import type { Handler } from 'aws-lambda';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
@@ -15,6 +17,7 @@ import { Schema } from '../../data/resource';
 import dayjs from "dayjs";
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+const s3 = new S3Client({});
 
 type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
@@ -109,8 +112,14 @@ async function scrapingContent(link: string) {
     const ths = $('.t_h');
     const tds = $('.t_b');
     const is02Items: IS02Input[] = [];
-    tds.each((i, el) => {
+    for (const [i, el] of Array.from(tds).entries()) {
         const date = $(ths[i]).html()?.trim().replace(/.*gray;"> | 0<\/span>|\(.*?\)/g, "");
+        const createdAt = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        if (i === 0) {
+            // アイキャッチ、OGP画像取得
+            const ogImage = $('meta[property="og:image"]').attr("content") as string;
+            await getImage(ogImage, createdAt);
+        }
         const header = $(ths[i]).text()?.trim();
         const content = $(el).html()?.trim();
         if (content) {
@@ -119,12 +128,12 @@ async function scrapingContent(link: string) {
                 content,
                 postId: postId,
                 header,
-                createdAt: dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                createdAt,
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"
             } as IS02Input);
         }
-    });
+    }
 
     const MAX_BATCH_SIZE = 25;
     const batches = [];
@@ -145,3 +154,26 @@ async function scrapingContent(link: string) {
     }
     return results;
 };
+
+// S3に画像を保存する関数
+async function getImage(ogImage: string, date: string) {
+    const res = await axios.get(ogImage, { responseType: "arraybuffer" });
+    const contentType = res.headers["content-type"];
+    if (!contentType || !contentType.startsWith("image/")) {
+        throw new Error(`Invalid content type: ${contentType}`);
+    }
+    let ext = contentType.replace("image/", ".");
+    if (ext === ".jpeg") ext = ".jpg";
+    // S3キー作成
+    const Key = `${dayjs(date).format("public/YYYY/MM/DD/")}${uuidv4()}${ext}`;
+    // PutObject パラメータ
+    // const putObjParam = {
+    //     Bucket: STORAGE_COMICDB_BUCKETNAME,
+    //     Key,
+    //     Body: Buffer.from(res.data),
+    // };
+    // console.info("PutObject REQ", putObjParam);
+    // const putResult = await s3.send(new PutObjectCommand(putObjParam));
+    // console.info("PutObject RES", putResult);
+    return Key;
+}

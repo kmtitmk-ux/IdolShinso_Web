@@ -1,6 +1,7 @@
 import Link from "next/link";
 import {
     CardContent,
+    Button,
     Typography,
     Grid,
     Rating,
@@ -139,7 +140,7 @@ const Blog = async () => {
                                 mt={1}
                             >
                                 <Stack direction="row" alignItems="center">
-                                    <Typography variant="h6">{dayjs(product.createdAt).format("YYYY/MM/DD")}</Typography>
+                                    <Typography>{dayjs(product.createdAt).format("YYYY/MM/DD")}</Typography>
                                     {/* <Typography
                                         color="textSecondary"
                                         ml={1}
@@ -148,12 +149,14 @@ const Blog = async () => {
                                         {product.createdAt}
                                     </Typography> */}
                                 </Stack>
-                                <Rating
+                                <Button size="small">カテゴリー</Button>
+
+                                {/* <Rating
                                     name="read-only"
                                     size="small"
                                     value={product.rating}
                                     readOnly
-                                />
+                                /> */}
                             </Stack>
                         </CardContent>
                     </BlankCard>
