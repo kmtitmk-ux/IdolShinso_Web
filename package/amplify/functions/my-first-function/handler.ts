@@ -18,6 +18,7 @@ import dayjs from "dayjs";
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
+const bucketName01 = process.env.BUCKET_NAME_IS01 as string;
 
 type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
@@ -121,7 +122,15 @@ async function scrapingContent(link: string) {
             await getImage(ogImage, createdAt);
         }
         const header = $(ths[i]).text()?.trim();
-        const content = $(el).html()?.trim();
+        let content = $(el).html()?.trim();
+        if (content?.includes("<img")) {
+            // 画像が含まれている場合は、画像をS3に保存
+            const imgSrc = $(el).find('img').attr('src') as string;
+            if (imgSrc) {
+                const imageKey = await getImage(imgSrc, createdAt);
+                content = content.replace(imgSrc, `https://${bucketName01}.s3.amazonaws.com/${imageKey}`);
+            }
+        }
         if (content) {
             is02Items.push({
                 id: uuidv4(),
@@ -167,13 +176,13 @@ async function getImage(ogImage: string, date: string) {
     // S3キー作成
     const Key = `${dayjs(date).format("public/YYYY/MM/DD/")}${uuidv4()}${ext}`;
     // PutObject パラメータ
-    // const putObjParam = {
-    //     Bucket: STORAGE_COMICDB_BUCKETNAME,
-    //     Key,
-    //     Body: Buffer.from(res.data),
-    // };
-    // console.info("PutObject REQ", putObjParam);
-    // const putResult = await s3.send(new PutObjectCommand(putObjParam));
-    // console.info("PutObject RES", putResult);
+    const putObjParam = {
+        Bucket: bucketName01,
+        Key,
+        Body: Buffer.from(res.data),
+    };
+    console.info("PutObject REQ", putObjParam);
+    const putResult = await s3.send(new PutObjectCommand(putObjParam));
+    console.info("PutObject RES", putResult);
     return Key;
 }
