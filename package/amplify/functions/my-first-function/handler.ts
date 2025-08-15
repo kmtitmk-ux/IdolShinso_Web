@@ -63,7 +63,11 @@ async function scrapingContent(link: string) {
         ExpressionAttributeNames: { "#pk": "title" },
         ExpressionAttributeValues: { ":titleValue": title }
     }));
-    console.log("result", JSON.stringify(result));
+    // タイトルが既に存在する場合はスキップ
+    if (result.Count ?? 0 > 0) {
+        console.info(`Title "${title}" already exists in table ${tableName01}. Skipping.`);
+        return;
+    }
 
     const transactWriteParams: TransactWriteCommandInput = { TransactItems: [] };
     (transactWriteParams.TransactItems ?? []).push({
@@ -91,7 +95,11 @@ async function scrapingContent(link: string) {
                 ExpressionAttributeNames: { "#pk": "name" },
                 ExpressionAttributeValues: { ":nameValue": name }
             }));
-            console.log("result", JSON.stringify(result));
+            // カテゴリーが既に存在する場合はスキップ
+            if (result.Count ?? 0 > 0) {
+                console.info(`Category "${name}" already exists in table ${tableName03}. Skipping.`);
+                return;
+            }
             (transactWriteParams.TransactItems ?? []).push({
                 Put: {
                     TableName: tableName03,
@@ -113,13 +121,14 @@ async function scrapingContent(link: string) {
     const ths = $('.t_h');
     const tds = $('.t_b');
     const is02Items: IS02Input[] = [];
+    let ogImageRes = { Key: "", id: "" };
     for (const [i, el] of Array.from(tds).entries()) {
         const date = $(ths[i]).html()?.trim().replace(/.*gray;"> | 0<\/span>|\(.*?\)/g, "");
         const createdAt = dayjs(date).isValid() ? dayjs(date).format('YYYY-MM-DDTHH:mm:ss.SSS[Z]') : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
         if (i === 0) {
             // アイキャッチ、OGP画像取得
             const ogImage = $('meta[property="og:image"]').attr("content") as string;
-            await getImage(ogImage, createdAt);
+            ogImageRes = await getImage(ogImage, createdAt);
         }
         const header = $(ths[i]).text()?.trim();
         let content = $(el).html()?.trim();
@@ -127,8 +136,8 @@ async function scrapingContent(link: string) {
             // 画像が含まれている場合は、画像をS3に保存
             const imgSrc = $(el).find('img').attr('src') as string;
             if (imgSrc) {
-                const imageKey = await getImage(imgSrc, createdAt);
-                content = content.replace(imgSrc, `https://${bucketName01}.s3.amazonaws.com/${imageKey}`);
+                const imageRes = await getImage(imgSrc, createdAt);
+                content = content.replace(imgSrc, `https://${bucketName01}.s3.amazonaws.com/${imageRes.Key}`);
             }
         }
         if (content) {
@@ -137,6 +146,7 @@ async function scrapingContent(link: string) {
                 content,
                 postId: postId,
                 header,
+                thumbnail: ogImageRes.id,
                 createdAt,
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"
@@ -161,7 +171,6 @@ async function scrapingContent(link: string) {
         console.log("BatchWrite params", JSON.stringify(params));
         await docClient.send(new BatchWriteCommand(params));
     }
-    return results;
 };
 
 // S3に画像を保存する関数
@@ -174,7 +183,8 @@ async function getImage(ogImage: string, date: string) {
     let ext = contentType.replace("image/", ".");
     if (ext === ".jpeg") ext = ".jpg";
     // S3キー作成
-    const Key = `${dayjs(date).format("public/YYYY/MM/DD/")}${uuidv4()}${ext}`;
+    const id = uuidv4();
+    const Key = `${dayjs(date).format("public/YYYY/MM/DD/")}${id}${ext}`;
     // PutObject パラメータ
     const putObjParam = {
         Bucket: bucketName01,
@@ -184,5 +194,5 @@ async function getImage(ogImage: string, date: string) {
     console.info("PutObject REQ", putObjParam);
     const putResult = await s3.send(new PutObjectCommand(putObjParam));
     console.info("PutObject RES", putResult);
-    return Key;
+    return { Key, id };
 }

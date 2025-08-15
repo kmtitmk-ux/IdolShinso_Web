@@ -11,6 +11,7 @@ const schema = a.schema({
         .model({
             title: a.string().required(),
             header: a.string(),
+            thumbnail: a.string(),
             comments: a.hasMany('IS02', ['postId']),
             categories: a.hasMany('IS03', ['postId'])
         })
