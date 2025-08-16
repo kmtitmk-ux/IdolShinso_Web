@@ -4,13 +4,19 @@ const envConfig = {
         TABLE_NAME_IS01: "IS01-2w6gn26ifzccdn6xdivunqamhu-NONE",
         TABLE_NAME_IS02: "IS02-2w6gn26ifzccdn6xdivunqamhu-NONE",
         TABLE_NAME_IS03: "IS03-2w6gn26ifzccdn6xdivunqamhu-NONE",
-        BUCKET_NAME_IS01: "amplify-dtb1zhx1jvcon-develop-b-is01bucketd5d9d3bb-xytrkowiqmzx"
+        BUCKET_NAME_IS01: "amplify-dtb1zhx1jvcon-main-bran-is01bucketd5d9d3bb-pxrydzwv0aeo"
     },
     develop: {
         TABLE_NAME_IS01: "IS01-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
         TABLE_NAME_IS02: "IS02-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
         TABLE_NAME_IS03: "IS03-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
         BUCKET_NAME_IS01: "amplify-dtb1zhx1jvcon-develop-b-is01bucketd5d9d3bb-xytrkowiqmzx"
+    },
+    local: {
+        TABLE_NAME_IS01: "IS01-lwae74brlvfstbdkoxvvvdcofq-NONE",
+        TABLE_NAME_IS02: "IS02-lwae74brlvfstbdkoxvvvdcofq-NONE",
+        TABLE_NAME_IS03: "IS03-lwae74brlvfstbdkoxvvvdcofq-NONE",
+        BUCKET_NAME_IS01: "amplify-modernizenextfree-kmtit-is01bucketd5d9d3bb-8lyst8isl15o"
     }
 };
 type Branch = "main" | "develop";

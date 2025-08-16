@@ -90,6 +90,8 @@ import outputs from '@/amplify_outputs.json';
 //     }
 // ];
 const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
+console.log(bucketName01)
+
 
 const Blog = async () => {
     const { data } = await serverClient.models.IS01.list({
@@ -102,7 +104,7 @@ const Blog = async () => {
             "categories.name"
         ]
     });
-    console.info("fetch data:", data[0].categories);
+    console.info("fetch data:", data[0]);
     const ecoCard: any[] = [];
     return (
         <Grid container spacing={3}>
@@ -125,7 +127,7 @@ const Blog = async () => {
                             /> */}
                         </Typography>
                         <Image
-                            src={`https://${bucketName01}.s3.amazonaws.com/${product.thumbnail}`}
+                            src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail}`}
                             alt={product.title}
                             width={400}
                             height={250}

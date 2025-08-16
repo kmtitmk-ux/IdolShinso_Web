@@ -5,3 +5,14 @@ npx aws-cdk bootstrap aws://117880326767/ap-northeast-1
 npx ampx sandbox
 
 aws lambda invoke --function-name amplify-modernizenextfree-myfirstfunctionlambdaF5A-IC6TcxhJKMA2 output.json
+
+
+# コピーデータ取得
+export PYTHONUTF8=1
+aws dynamodb scan \
+  --table-name IS03-o4ipk765lnd2fm3ecrgqjnhbsq-NONE \
+  --region ap-northeast-1 \
+  --output json > dev3.json
+
+
+aws s3 cp s3://amplify-dtb1zhx1jvcon-develop-b-is01bucketd5d9d3bb-xytrkowiqmzx/public/ s3://amplify-modernizenextfree-kmtit-is01bucketd5d9d3bb-8lyst8isl15o/public/ --recursive
