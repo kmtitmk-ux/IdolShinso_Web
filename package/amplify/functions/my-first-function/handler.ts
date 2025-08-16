@@ -146,7 +146,7 @@ async function scrapingContent(link: string) {
                 content,
                 postId: postId,
                 header,
-                thumbnail: ogImageRes.id,
+                thumbnail: ogImageRes.Key,
                 createdAt,
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"

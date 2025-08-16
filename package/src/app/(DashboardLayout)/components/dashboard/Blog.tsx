@@ -19,6 +19,7 @@ import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
 import { serverClient } from "@/utils/serverClient";
 import Image from "next/image";
 import dayjs from 'dayjs';
+import outputs from '@/amplify_outputs.json';
 
 // const client = generateClient<Schema>();
 
@@ -88,13 +89,14 @@ import dayjs from 'dayjs';
 //         rating: 2,
 //     }
 // ];
-
+const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
 
 const Blog = async () => {
     const { data } = await serverClient.models.IS01.list({
         selectionSet: [
             "id",
             "title",
+            "thumbnail",
             "createdAt",
             "categories.id",
             "categories.name"
@@ -122,6 +124,17 @@ const Blog = async () => {
                                 }}
                             /> */}
                         </Typography>
+                        <Image
+                            src={`https://${bucketName01}.s3.amazonaws.com/${product.thumbnail}`}
+                            alt={product.title}
+                            width={400}
+                            height={250}
+                            style={{
+                                width: '100%',
+                                height: 'auto',
+                                objectFit: 'cover'
+                            }}
+                        />
                         {/* <Tooltip title="Add To Cart">
                             <Fab
                                 size="small"
