@@ -35,7 +35,7 @@ const schema = a.schema({
             name: a.string(),
         })
         .secondaryIndexes((index) => [index("name")])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest()])
 });
 
 export type Schema = ClientSchema<typeof schema>;

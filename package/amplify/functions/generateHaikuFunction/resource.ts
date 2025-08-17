@@ -24,8 +24,8 @@ type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 const selectedConfig = envConfig[branch] || envConfig.develop;
 
-export const myFirstFunction = defineFunction({
-    name: "my-first-function",
+export const generateHaikuFunction = defineFunction({
+    name: "generateHaikuFunction",
     entry: "./handler.ts",
     timeoutSeconds: 900,
     environment: {
@@ -35,3 +35,5 @@ export const myFirstFunction = defineFunction({
         BUCKET_NAME_IS01: selectedConfig.BUCKET_NAME_IS01
     }
 });
+
+export const MODEL_ID = "anthropic.claude-3-haiku-20240307-v1:0";

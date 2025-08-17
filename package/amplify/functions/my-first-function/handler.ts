@@ -7,9 +7,10 @@ import {
     TransactWriteCommandInput,
     DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
-const { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3ServiceException } = require("@aws-sdk/client-s3");
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3ServiceException } from "@aws-sdk/client-s3";
 
 import type { Handler } from 'aws-lambda';
+
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
