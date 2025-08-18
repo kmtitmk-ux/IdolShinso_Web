@@ -2,13 +2,13 @@ import { defineFunction } from "@aws-amplify/backend";
 
 const envConfig = {
     main: {
-        MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
+        MODEL_ID: "amazon.titan-text-express-v1",
     },
     develop: {
-        MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0",
+        MODEL_ID: "amazon.titan-text-express-v1",
     },
     local: {
-        MODEL_ID: "anthropic.claude-3-haiku-20240307-v1:0"
+        MODEL_ID: "amazon.titan-text-express-v1"
     }
 };
 type Branch = "main" | "develop";

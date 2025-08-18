@@ -10,34 +10,40 @@ import type { Handler } from 'aws-lambda';
 const client = new BedrockRuntimeClient();
 
 export const handler: Handler = async (event: any) => {
+    console.info("event", event);
+    const prompt = `
+次の日本語の記事タイトルをリライトしてください。
+条件：
+- 読者の興味を引くキャッチーな表現にする
+- 文字数は30文字以内
+- 元の意味はできるだけ保つ
 
-    // User prompt
-    const prompt = event.arguments.prompt;
+元タイトル：「${event.title}」
+`;
 
     // Invoke model
     const input = {
-        modelId: process.env.MODEL_ID,
+        modelId: process.env.MODEL_ID, // 例: "anthropic.claude-3-haiku-20240307-v1:0"
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
             anthropic_version: "bedrock-2023-05-31",
-            system:
-                "You are a an expert at crafting a haiku. You are able to craft a haiku out of anything and therefore answer only in haiku.",
             messages: [
                 {
                     role: "user",
                     content: [
                         {
                             type: "text",
-                            text: prompt,
+                            text: prompt, // ← ここに「日本語タイトルをリライトしてください」などの指示
                         },
                     ],
                 },
             ],
             max_tokens: 1000,
-            temperature: 0.5,
-        }),
-    } as InvokeModelCommandInput;
+            temperature: 0.5
+        })
+    };
+
 
     const command = new InvokeModelCommand(input);
 
