@@ -23,28 +23,18 @@ export const handler: Handler = async (event: any) => {
 
     // Invoke model
     const input = {
-        modelId: process.env.MODEL_ID, // 例: "anthropic.claude-3-haiku-20240307-v1:0"
+        modelId: process.env.MODEL_ID,
         contentType: "application/json",
         accept: "application/json",
         body: JSON.stringify({
-            anthropic_version: "bedrock-2023-05-31",
-            messages: [
-                {
-                    role: "user",
-                    content: [
-                        {
-                            type: "text",
-                            text: prompt, // ← ここに「日本語タイトルをリライトしてください」などの指示
-                        },
-                    ],
-                },
-            ],
-            max_tokens: 1000,
-            temperature: 0.5
+            inputText: prompt,
+            textGenerationConfig: {
+                maxTokenCount: 512,
+                temperature: 0.7,
+                topP: 0.9
+            }
         })
     };
-
-
     const command = new InvokeModelCommand(input);
 
     const response = await client.send(command);
