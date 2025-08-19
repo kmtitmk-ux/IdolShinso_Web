@@ -10,12 +10,14 @@ const schema = a.schema({
     IS01: a
         .model({
             title: a.string().required(),
+            rewrittenTitle: a.string(),
             header: a.string(),
+            slug: a.string(),
             thumbnail: a.string(),
             comments: a.hasMany('IS02', ['postId']),
             categories: a.hasMany('IS03', ['postId'])
         })
-        .secondaryIndexes((index) => [index("title")])
+        .secondaryIndexes((index) => [index("title"), index("slug")])
         .authorization((allow) => [allow.guest()]),
     // .authorization((allow) => [
     //     allow.guest().to(['read']), // 認証なしで読み込み許可

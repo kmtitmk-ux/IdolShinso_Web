@@ -8,6 +8,11 @@ import {
     DynamoDBDocumentClient,
 } from "@aws-sdk/lib-dynamodb";
 import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+    BedrockRuntimeClient,
+    InvokeModelCommand,
+    InvokeModelCommandInput,
+} from "@aws-sdk/client-bedrock-runtime";
 
 import type { Handler } from 'aws-lambda';
 
@@ -19,9 +24,11 @@ import dayjs from "dayjs";
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
+const bedrock = new BedrockRuntimeClient();
 const bucketName01 = process.env.BUCKET_NAME_IS01 as string;
+const MODEL_ID = process.env.MODEL_ID as string;
 
-type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
+type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
 type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
 type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'name'> & { __typename: 'IS03'; };
 
@@ -76,6 +83,7 @@ async function scrapingContent(link: string) {
             TableName: tableName01,
             Item: {
                 id: postId,
+                slug: await createSlug(title),
                 title: title,
                 createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
@@ -196,4 +204,49 @@ async function getImage(ogImage: string, date: string) {
     const putResult = await s3.send(new PutObjectCommand(putObjParam));
     console.info("PutObject RES", putResult);
     return { Key, id };
+}
+
+// スラッグを作成する関数
+async function createSlug(title: string) {
+    console.info("createSlug", title);
+    const prompt = `
+以下の日本語タイトルをURLスラッグに変換してください。ルール：
+1. 漢字をHepburn式ローマ字に変換
+2. スペースをハイフン（-）に置き換え
+3. 特殊文字（！、？、【】、絵文字など）を削除
+4. すべて小文字
+
+タイトル: ${title}
+`;
+    const input = {
+        modelId: MODEL_ID,
+        contentType: "application/json",
+        accept: "application/json",
+        body: JSON.stringify({
+            inputText: prompt,
+            textGenerationConfig: {
+                maxTokenCount: 512,
+                temperature: 0.7,
+                topP: 0.9
+            }
+        })
+    };
+    const response = await bedrock.send(new InvokeModelCommand(input));
+    const data = JSON.parse(new TextDecoder().decode(response.body));
+    const rawText = data?.results?.[0]?.outputText || '';
+    const slug = toUrlSlug(rawText);
+    console.info('slug', slug);
+    // 重複チェックを追加する
+    return slug;
+};
+
+// 全角を削除する関数
+function toUrlSlug(str: string) {
+    if (!str) return '';
+    return str
+        // ASCII以外を削除（全角文字や絵文字も含む）
+        .replace(/[^a-zA-Z0-9\s-]/g, '')
+        .trim()
+        .replace(/\s+/g, '-') // 空白→ハイフン
+        .toLowerCase();
 }

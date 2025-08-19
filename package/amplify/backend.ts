@@ -1,8 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { myFirstFunction } from './functions/my-first-function/resource';
-import { generateHaikuFunction, MODEL_ID } from './functions/generateHaikuFunction/resource';
+import { myFirstFunction, MODEL_ID } from './functions/my-first-function/resource';
 import { storage } from './storage/resource';
 import { Effect, PolicyStatement } from "aws-cdk-lib/aws-iam";
 
@@ -13,11 +12,10 @@ export const backend = defineBackend({
   auth,
   data,
   myFirstFunction,
-  storage,
-  generateHaikuFunction
+  storage
 });
 
-backend.generateHaikuFunction.resources.lambda.addToRolePolicy(
+backend.myFirstFunction.resources.lambda.addToRolePolicy(
   new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["bedrock:InvokeModel"],
