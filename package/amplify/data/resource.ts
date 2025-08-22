@@ -18,11 +18,11 @@ const schema = a.schema({
             categories: a.hasMany('IS03', ['postId'])
         })
         .secondaryIndexes((index) => [index("title"), index("slug")])
-        .authorization((allow) => [allow.guest()]),
-    // .authorization((allow) => [
-    //     allow.guest().to(['read']), // 認証なしで読み込み許可
-    //     allow.authenticated().to(['create', 'update', 'delete', 'read'])
-    // ]),
+        // .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [
+            allow.guest().to(['read']), // 認証なしで読み込み許可
+            allow.authenticated().to(['create', 'update', 'delete', 'read'])
+        ]),
     IS02: a
         .model({
             postId: a.string(),

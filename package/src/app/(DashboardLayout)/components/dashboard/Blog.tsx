@@ -21,7 +21,6 @@ import Image from "next/image";
 import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
 
-// const client = generateClient<Schema>();
 
 // const ecoCard = [
 //     {
@@ -90,8 +89,6 @@ import outputs from '@/amplify_outputs.json';
 //     }
 // ];
 const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
-console.log(bucketName01)
-
 
 const Blog = async () => {
     const { data } = await serverClient.models.IS01.list({
@@ -104,7 +101,7 @@ const Blog = async () => {
             "categories.name"
         ]
     });
-    console.info("fetch data:", data[0]);
+    console.info("fetch data:", data);
     const ecoCard: any[] = [];
     return (
         <Grid container spacing={3}>
