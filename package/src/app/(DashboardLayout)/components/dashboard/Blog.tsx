@@ -94,7 +94,9 @@ const Blog = async () => {
     const { data } = await serverClient.models.IS01.list({
         selectionSet: [
             "id",
+            "slug",
             "title",
+            "rewrittenTitle",
             "thumbnail",
             "createdAt",
             "categories.id",
@@ -114,26 +116,28 @@ const Blog = async () => {
                         lg: 3
                     }}>
                     <BlankCard>
-                        <Typography component={Link} href={`/posts/${product.slug}`}>
-                            {/* <Avatar
+                        {/* <Typography>
+                            <Avatar
                                 src={product.photo} variant="square"
                                 sx={{
                                     height: 250,
                                     width: '100%',
                                 }}
-                            /> */}
-                        </Typography>
-                        <Image
-                            src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail}`}
-                            alt={product.title}
-                            width={400}
-                            height={250}
-                            style={{
-                                width: '100%',
-                                height: 'auto',
-                                objectFit: 'cover'
-                            }}
-                        />
+                            />
+                        </Typography> */}
+                        <Link href={`/posts/${product.slug}`}>
+                            <Image
+                                src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail}`}
+                                alt={product.title}
+                                width={400}
+                                height={250}
+                                style={{
+                                    width: '100%',
+                                    height: 'auto',
+                                    objectFit: 'cover'
+                                }}
+                            />
+                        </Link>
                         {/* <Tooltip title="Add To Cart">
                             <Fab
                                 size="small"
@@ -144,7 +148,9 @@ const Blog = async () => {
                             </Fab>
                         </Tooltip> */}
                         <CardContent sx={{ p: 3, pt: 2 }}>
-                            <Typography variant="h6">{product.title}</Typography>
+                            <Typography component={Link} href={`/posts/${product.slug}`} variant="h6">
+                                {product.rewrittenTitle}
+                            </Typography>
                             <Stack
                                 direction="row"
                                 alignItems="center"
@@ -161,8 +167,9 @@ const Blog = async () => {
                                         {product.createdAt}
                                     </Typography> */}
                                 </Stack>
-                                <Button size="small">カテゴリー</Button>
-
+                                <Button size="small">
+                                    {product.categories[0].name}
+                                </Button>
                                 {/* <Rating
                                     name="read-only"
                                     size="small"
@@ -173,8 +180,9 @@ const Blog = async () => {
                         </CardContent>
                     </BlankCard>
                 </Grid>
-            ))}
-        </Grid>
+            ))
+            }
+        </Grid >
     );
 };
 

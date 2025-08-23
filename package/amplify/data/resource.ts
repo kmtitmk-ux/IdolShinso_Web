@@ -10,24 +10,24 @@ const schema = a.schema({
     IS01: a
         .model({
             title: a.string().required(),
+            slug: a.string().required(),
             rewrittenTitle: a.string(),
-            header: a.string(),
-            slug: a.string(),
             thumbnail: a.string(),
             comments: a.hasMany('IS02', ['postId']),
             categories: a.hasMany('IS03', ['postId'])
         })
         .secondaryIndexes((index) => [index("title"), index("slug")])
-        // .authorization((allow) => [allow.guest()]),
-        .authorization((allow) => [
-            allow.guest().to(['read']), // 認証なしで読み込み許可
-            allow.authenticated().to(['create', 'update', 'delete', 'read'])
-        ]),
+        .authorization((allow) => [allow.guest()]),
+    // .authorization((allow) => [
+    //     allow.guest().to(['read']), // 認証なしで読み込み許可
+    //     allow.authenticated().to(['create', 'update', 'delete', 'read'])
+    // ]),
     IS02: a
         .model({
             postId: a.string(),
             post: a.belongsTo('IS01', ['postId']),
             content: a.string(),
+            header: a.string()
         })
         .authorization((allow) => [allow.guest()]),
     IS03: a
@@ -35,6 +35,7 @@ const schema = a.schema({
             postId: a.string(),
             post: a.belongsTo('IS01', ['postId']),
             name: a.string(),
+            slug: a.string().required(),
         })
         .secondaryIndexes((index) => [index("name")])
         .authorization((allow) => [allow.guest()])
