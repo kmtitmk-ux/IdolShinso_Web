@@ -34,8 +34,8 @@ const TABLE_NAME_IS03 = process.env.TABLE_NAME_IS03 as string;
 const MODEL_ID = process.env.MODEL_ID as string;
 const MAX_BATCH_SIZE = 25;
 
-type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'header' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
-type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
+type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
+type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'header' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
 type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'name'> & { __typename: 'IS03'; };
 
 export const handler: Handler = async (event: any) => {
