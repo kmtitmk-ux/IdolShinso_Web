@@ -9,10 +9,10 @@ const { window } = new JSDOM('');
 const purify = DOMPurify(window);
 
 interface PageProps {
-    params: { slug: string; };
+  params: Promise<{ slug: string }>; // paramsをPromiseでラップ
 }
 const SamplePage = async ({ params }: PageProps) => {
-    const { slug } = params;
+    const { slug } = await params;
     const { data } = await serverClient.models.IS01.list({
         filter: {
             slug: { eq: slug }
@@ -27,7 +27,7 @@ const SamplePage = async ({ params }: PageProps) => {
             "categories.id",
             "categories.name",
             "comments.id",
-            // "comments.header",
+            "comments.header",
             "comments.content",
         ]
     });
