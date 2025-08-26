@@ -8,7 +8,11 @@ import { serverClient } from "@/utils/serverClient";
 const { window } = new JSDOM('');
 const purify = DOMPurify(window);
 
-const SamplePage = async ({ slug }: { slug: string; }) => {
+interface PageProps {
+    params: { slug: string; };
+}
+const SamplePage = async ({ params }: PageProps) => {
+    const { slug } = params;
     const { data } = await serverClient.models.IS01.list({
         filter: {
             slug: { eq: slug }
@@ -31,7 +35,8 @@ const SamplePage = async ({ slug }: { slug: string; }) => {
     return (
         <PageContainer
             title={data[0].rewrittenTitle ?? "" as string}
-            description="this is Sample page">
+            description="this is Sample page"
+        >
             <DashboardCard title={data[0].rewrittenTitle ?? "" as string}>
                 {/* <Typography>{data[0].rewrittenTitle}</Typography> */}
                 <Grid container spacing={3}>

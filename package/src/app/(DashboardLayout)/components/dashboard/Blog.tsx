@@ -21,7 +21,6 @@ import Image from "next/image";
 import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
 
-
 // const ecoCard = [
 //     {
 //         title: "Boat Headphone",
@@ -180,8 +179,7 @@ const Blog = async () => {
                         </CardContent>
                     </BlankCard>
                 </Grid>
-            ))
-            }
+            ))}
         </Grid >
     );
 };
