@@ -252,13 +252,14 @@ async function getImage(ogImage: string, date: string) {
 async function createSlug(title: string) {
     console.info("createSlug", title);
     const prompt = `
-以下の日本語タイトルをURLスラッグに変換してください。ルール：
-1. 漢字をHepburn式ローマ字に変換
+以下の日本語タイトルをURLスラッグに変換してください。
+タイトル: ${title}
+
+ルール：
+1. 文字をHepburn式ローマ字に変換
 2. スペースをハイフン（-）に置き換え
 3. 特殊文字（！、？、【】、絵文字など）を削除
 4. すべて小文字
-
-タイトル: ${title}
 `;
     const input = {
         modelId: MODEL_ID,
