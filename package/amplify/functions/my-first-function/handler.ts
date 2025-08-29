@@ -59,14 +59,13 @@ export const handler: Handler = async (event: any) => {
                 }
             });
             const outputTitles = await Promise.all(hrefs.map(href => scrapingContent(href)));
-            if (outputTitles) {
-                await outPutS3(outputTitles, "title");
-            }
+            if (outputTitles) await outPutS3(outputTitles, "title");
+            
+            await createPagenation();
             break;
         case "updateRewriteTitle":
             const titleData = await getObjetS3("private/edit/title.jsonl") as string;
             if (titleData) await updateRewriteTitle(titleData);
-
             break;
     }
     return {
@@ -162,8 +161,8 @@ async function scrapingContent(link: string) {
     const ths = $('#mainEntity .entry-title + div div.meta');
     const tds = $('#mainEntity .entry-title + div .message');
     const is02Items: IS02Input[] = [];
-    let ogImageRes = { Key: "", id: "" };
     for (const [i, el] of Array.from(tds).entries()) {
+        let ogImageRes = { Key: "", id: "" };
         const dateText = $(ths[i]).children(".date").text()?.trim()
             .replace(/\([^)]+\)/, "")
             .replace(/\.\d+$/, "");
@@ -175,6 +174,7 @@ async function scrapingContent(link: string) {
             // アイキャッチ、OGP画像取得
             const ogImage = $('meta[property="og:image"]').attr("content") as string;
             ogImageRes = await getImage(ogImage, createdAt);
+            console.info("ogImageRes", ogImageRes);
         }
         $(ths[i]).find('span.postusername').remove();
         const header = $(ths[i]).text()?.trim();
@@ -193,7 +193,7 @@ async function scrapingContent(link: string) {
                 content,
                 postId: postId,
                 header,
-                thumbnail: ogImageRes.Key,
+                thumbnail: ogImageRes.Key ?? "" as string,
                 createdAt,
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IS02"
@@ -213,7 +213,7 @@ async function scrapingContent(link: string) {
     }));
     const results: string[] = [];
     for (const params of putRequestsArray) {
-        console.log("BatchWrite params", JSON.stringify(params));
+        console.info("BatchWrite params", JSON.stringify(params));
         await docClient.send(new BatchWriteCommand(params));
     }
     return outputTitle;
@@ -375,4 +375,34 @@ async function updateRewriteTitle(titleData: string) {
         console.info("TransactWrite params", JSON.stringify(transactWriteParams));
         await docClient.send(new TransactWriteCommand(transactWriteParams));
     }
+}
+
+// ページネーション情報を作成する関数
+async function createPagenation() {
+    const pagenation: { [key: number]: string | null; } = {};
+    let lastEvaluatedKey: { [key: string]: any; } | undefined = undefined;
+    let currentPage = 1;
+
+    do {
+        const params = {
+            TableName: TABLE_NAME_IS01,
+            Limit: 5,
+            ExclusiveStartKey: lastEvaluatedKey
+        };
+        const result: any = await docClient.send(new QueryCommand(params));
+        console.info(`Fetched page ${currentPage} with ${result.Items?.length || 0} items.`);
+        pagenation[currentPage] = result.LastEvaluatedKey ? result.LastEvaluatedKey : null;
+        lastEvaluatedKey = result.LastEvaluatedKey;
+        currentPage++;
+    } while (lastEvaluatedKey);
+
+    // S3に保存
+    await s3.send(
+        new PutObjectCommand({
+            Bucket: BUCKET_NAME_IS01,
+            Key: `public/pagenation.json`,
+            Body: JSON.stringify(pagenation, null, 2),
+        })
+    );
+    console.info("Pagenation data saved to S3:", JSON.stringify(pagenation, null, 2));
 }

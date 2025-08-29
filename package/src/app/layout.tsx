@@ -3,7 +3,7 @@ import ClientThemeProvider from "./ClientThemeProvider";
 import { Amplify } from 'aws-amplify';
 import outputs from '@/amplify_outputs.json';
 
-Amplify.configure(outputs);
+Amplify.configure(outputs, { ssr: true });
 
 export default function RootLayout({
     children,

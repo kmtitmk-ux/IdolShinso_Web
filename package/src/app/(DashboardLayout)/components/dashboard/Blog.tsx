@@ -7,7 +7,8 @@ import {
     Rating,
     Tooltip,
     Fab,
-    Avatar
+    Avatar,
+    Pagination
 } from "@mui/material";
 // import img1 from "public/images/products/s4.jpg";
 // import img2 from "public/images/products/s5.jpg";
@@ -16,12 +17,14 @@ import {
 import { Stack } from "@mui/system";
 import { IconBasket } from "@tabler/icons-react";
 import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
-import { serverClient } from "@/utils/serverClient";
+import { cookiesClient } from "@/utils/amplifyServerUtils";
 import Image from "next/image";
 import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
+import { getUrl } from 'aws-amplify/storage';
 
-// const ecoCard = [
+
+// const data = [
 //     {
 //         title: "Boat Headphone",
 //         slug: "September 14, 2023",
@@ -89,8 +92,13 @@ import outputs from '@/amplify_outputs.json';
 // ];
 const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
 
-const Blog = async () => {
-    const { data } = await serverClient.models.IS01.list({
+const Blog = async ({ searchParams, nextToken }: { searchParams: { page?: string; }; nextToken: string; }) => {
+    const { page } = searchParams;
+    const currentPage = parseInt(page || "1", 10);
+    console.info("searchParams:", searchParams);
+    console.info("nextToken", nextToken);
+    console.info("currentPage:", currentPage);
+    const { data } = await cookiesClient.models.IS01.list({
         selectionSet: [
             "id",
             "slug",
@@ -100,20 +108,22 @@ const Blog = async () => {
             "createdAt",
             "categories.id",
             "categories.name"
-        ]
+        ],
+        // nextToken,
     });
-    console.info("fetch data:", data);
-    const ecoCard: any[] = [];
+
+    // // データをフォーマット
+    // const formattedData = data.map((item) => ({
+    //     ...item,
+    //     createdAt: item.createdAt ? new Date(item.createdAt).toISOString() : "",
+    //     thumbnail: item.thumbnail || "/images/fallback.jpg", // フォールバック画像
+    // }));
+    // console.info("fetch data:", formattedData);
+
     return (
-        <Grid container spacing={3}>
+        <>
             {data?.map((product: any, index: number) => (
-                <Grid
-                    key={index}
-                    size={{
-                        xs: 12,
-                        md: 4,
-                        lg: 3
-                    }}>
+                <Grid key={index}>
                     <BlankCard>
                         {/* <Typography>
                             <Avatar
@@ -124,9 +134,9 @@ const Blog = async () => {
                                 }}
                             />
                         </Typography> */}
-                        <Link href={`/posts/${product.slug}`}>
+                        <Link href={`/posts/${product.slug ?? ""}`}>
                             <Image
-                                src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail}`}
+                                src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail ?? ""}`}
                                 alt={product.title}
                                 width={400}
                                 height={250}
@@ -147,8 +157,8 @@ const Blog = async () => {
                             </Fab>
                         </Tooltip> */}
                         <CardContent sx={{ p: 3, pt: 2 }}>
-                            <Typography component={Link} href={`/posts/${product.slug}`} variant="h6">
-                                {product.rewrittenTitle}
+                            <Typography component={Link} href={`/posts/${product.slug ?? ""}`} variant="h6">
+                                {product.rewrittenTitle ?? ""}
                             </Typography>
                             <Stack
                                 direction="row"
@@ -157,7 +167,7 @@ const Blog = async () => {
                                 mt={1}
                             >
                                 <Stack direction="row" alignItems="center">
-                                    <Typography>{dayjs(product.createdAt).format("YYYY/MM/DD")}</Typography>
+                                    <Typography>{dayjs(product?.createdAt ?? "").format("YYYY/MM/DD")}</Typography>
                                     {/* <Typography
                                         color="textSecondary"
                                         ml={1}
@@ -167,7 +177,7 @@ const Blog = async () => {
                                     </Typography> */}
                                 </Stack>
                                 <Button size="small">
-                                    {product.categories[0].name}
+                                    {product?.categories[0]?.name ?? ""}
                                 </Button>
                                 {/* <Rating
                                     name="read-only"
@@ -180,7 +190,7 @@ const Blog = async () => {
                     </BlankCard>
                 </Grid>
             ))}
-        </Grid >
+        </>
     );
 };
 
