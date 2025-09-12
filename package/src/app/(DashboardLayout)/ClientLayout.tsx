@@ -4,6 +4,9 @@ import React, { useState } from "react";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
 import Header from "@/app/(DashboardLayout)/layout/header/Header";
 import Sidebar from "@/app/(DashboardLayout)/layout/sidebar/Sidebar";
+import { Amplify } from 'aws-amplify';
+import outputs from '@/amplify_outputs.json';
+Amplify.configure(outputs);
 
 export default function ClientLayout({ children }: { children: React.ReactNode; }) {
     const [isSidebarOpen, setSidebarOpen] = useState(true);

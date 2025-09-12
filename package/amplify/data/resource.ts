@@ -7,38 +7,55 @@ specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 const schema = a.schema({
-    IS01: a
+    IsPosts: a
         .model({
             title: a.string().required(),
             slug: a.string().required(),
             rewrittenTitle: a.string(),
             thumbnail: a.string(),
-            comments: a.hasMany('IS02', ['postId']),
-            categories: a.hasMany('IS03', ['postId'])
+            comments: a.hasMany('IsComments', 'postId'),
+            postmeta: a.hasMany('IsPostMeta', 'postId'),
         })
-        .secondaryIndexes((index) => [index("title"), index("slug")])
+        .secondaryIndexes((index) => [
+            index('title'),
+            index('slug'),
+        ])
         .authorization((allow) => [allow.guest()]),
-    // .authorization((allow) => [
-    //     allow.guest().to(['read']), // 認証なしで読み込み許可
-    //     allow.authenticated().to(['create', 'update', 'delete', 'read'])
-    // ]),
-    IS02: a
+    IsPostMeta: a
         .model({
-            postId: a.string(),
-            post: a.belongsTo('IS01', ['postId']),
-            content: a.string(),
-            header: a.string()
-        })
-        .authorization((allow) => [allow.guest()]),
-    IS03: a
-        .model({
-            postId: a.string(),
-            post: a.belongsTo('IS01', ['postId']),
-            name: a.string(),
+            postId: a.id(),
+            name: a.string().required(),
             slug: a.string().required(),
+            taxonomy: a.string().required(),
+            post: a.belongsTo('IsPosts', 'postId'),
         })
-        .secondaryIndexes((index) => [index("name")])
-        .authorization((allow) => [allow.guest()])
+        .secondaryIndexes((index) => [
+            index('slug').sortKeys(['taxonomy'])
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsTerms: a
+        .model({
+            name: a.string().required(),
+            slug: a.string().required(),
+            taxonomy: a.string().required(),
+        })
+        .secondaryIndexes((index) => [
+            index('slug'),
+            index('taxonomy')
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsComments: a
+        .model({
+            postId: a.id(),
+            header: a.string(),
+            content: a.string(),
+            createdAt: a.datetime().required(),
+            post: a.belongsTo('IsPosts', 'postId')
+        })
+        .secondaryIndexes((index) => [
+            index('postId').sortKeys(['createdAt'])
+        ])
+        .authorization((allow) => [allow.guest()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

@@ -11,6 +11,7 @@
   "dependencies": {
     "@aws-amplify/adapter-nextjs": "^1.6.8",
     "@aws-amplify/ui-react-storage": "^3.12.1",
+    "@dotenvx/dotenvx": "^1.49.0",
     "@emotion/cache": "^11.11.0",
     "@emotion/react": "^11.14.0",
     "@emotion/server": "^11.11.0",
@@ -35,7 +36,8 @@
     "react-apexcharts": "1.7.0",
     "react-dom": "19.1.0",
     "react-mui-sidebar": "^1.6.3",
-    "react-syntax-highlighter": "^15.6.1"
+    "react-syntax-highlighter": "^15.6.1",
+    "wanakana": "^5.3.1"
   },
   "devDependencies": {
     "@aws-amplify/backend": "^1.16.1",

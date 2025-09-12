@@ -1,1 +1,4 @@
 /tools/
+.env.sandbox
+cmd.txt
+package/title.jsonl

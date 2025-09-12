@@ -6,7 +6,6 @@ import { baselightTheme } from "@/utils/theme/DefaultColors";
 import { CacheProvider } from "@emotion/react";
 import createCache from "@emotion/cache";
 
-// SSR/CSR で一致させるための Emotion キャッシュ
 const createEmotionCache = () => createCache({ key: "mui", prepend: true });
 const clientSideEmotionCache = createEmotionCache();
 

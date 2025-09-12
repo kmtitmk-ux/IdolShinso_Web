@@ -13,7 +13,6 @@ const MSidebar = ({
 }: ItemType) => {
     const lgUp = useMediaQuery((theme: any) => theme.breakpoints?.up("lg"));
     const sidebarWidth = "270px";
-
     // Custom CSS for short scrollbar
     const scrollbarStyles = {
         '&::-webkit-scrollbar': {
@@ -25,7 +24,6 @@ const MSidebar = ({
             borderRadius: '15px',
         },
     };
-
 
     if (lgUp) {
         return (

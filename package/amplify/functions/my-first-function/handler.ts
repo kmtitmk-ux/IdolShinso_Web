@@ -3,40 +3,53 @@ import {
     BatchWriteCommand,
     PutCommand,
     QueryCommand,
+    UpdateCommand,
     TransactWriteCommand,
     TransactWriteCommandInput,
     DynamoDBDocumentClient,
+    PutCommandInput,
+    QueryCommandInput
 } from "@aws-sdk/lib-dynamodb";
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command, NoSuchKey, S3ServiceException } from "@aws-sdk/client-s3";
+import {
+    S3Client,
+    PutObjectCommand,
+    GetObjectCommand,
+    ListObjectsV2Command,
+    NoSuchKey,
+    S3ServiceException
+} from "@aws-sdk/client-s3";
 import {
     BedrockRuntimeClient,
     InvokeModelCommand,
     InvokeModelCommandInput,
 } from "@aws-sdk/client-bedrock-runtime";
-
-import type { Handler } from 'aws-lambda';
-
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
 import { Schema } from '../../data/resource';
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
+import wanakana from "wanakana";
+
+import type { Handler } from 'aws-lambda';
+
 dayjs.extend(customParseFormat);
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
 const bedrock = new BedrockRuntimeClient();
-const BUCKET_NAME_IS01 = process.env.BUCKET_NAME_IS01 as string;
-const TABLE_NAME_IS01 = process.env.TABLE_NAME_IS01 as string;
-const TABLE_NAME_IS02 = process.env.TABLE_NAME_IS02 as string;
-const TABLE_NAME_IS03 = process.env.TABLE_NAME_IS03 as string;
+const BUCKET_NAME_IS_01 = process.env.BUCKET_NAME_IS_01 as string;
+const TABLE_NAME_IS_POSTS = process.env.TABLE_NAME_IS_POSTS as string;
+const TABLE_NAME_IS_POSTMETA = process.env.TABLE_NAME_IS_POSTMETA as string;
+const TABLE_NAME_IS_TERMS = process.env.TABLE_NAME_IS_TERMS as string;
+const TABLE_NAME_IS_COMMENTS = process.env.TABLE_NAME_IS_COMMENTS as string;
 const MODEL_ID = process.env.MODEL_ID as string;
 const MAX_BATCH_SIZE = 25;
 
-type IS01Input = Pick<Schema['IS01']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IS01'; };
-type IS02Input = Pick<Schema['IS02']['type'], 'id' | 'postId' | 'header' | 'content' | 'createdAt' | 'updatedAt'> & { __typename: 'IS02'; };
-type IS03Input = Pick<Schema['IS03']['type'], 'id' | 'postId' | 'name'> & { __typename: 'IS03'; };
+type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
+type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
+type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
+type IS_COMMENTS_INPUT = Pick<Schema['IsComments']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsComments'; };
 
 export const handler: Handler = async (event: any) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
@@ -44,15 +57,13 @@ export const handler: Handler = async (event: any) => {
         case "scrapingContent":
             const url = 'https://hpupdate.info/';
             console.info("axios", url);
-            const res = await axios.get(url, {
-                headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-            });
+            const res = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
             await new Promise(res => setTimeout(res, 1000));
             const $ = cheerio.load(res.data);
             const titles = $('a.entry-link');
             const hrefs: string[] = [];
             titles.each((i, el) => {
-                if (i < 2) {
+                if (i < 5) {
                     const href = $(el).attr('href') as string;
                     if (href) hrefs.push(href);
                     const text = $(el).text();
@@ -60,8 +71,6 @@ export const handler: Handler = async (event: any) => {
             });
             const outputTitles = await Promise.all(hrefs.map(href => scrapingContent(href)));
             if (outputTitles) await outPutS3(outputTitles, "title");
-            
-            await createPagenation();
             break;
         case "updateRewriteTitle":
             const titleData = await getObjetS3("private/edit/title.jsonl") as string;
@@ -74,6 +83,7 @@ export const handler: Handler = async (event: any) => {
     };
 };
 
+
 async function scrapingContent(link: string) {
     const outputTitle = {
         id: "",
@@ -81,143 +91,219 @@ async function scrapingContent(link: string) {
         rewrittenTitle: ""
     };
     console.info("axios", link);
-    const res = await axios.get(link, {
-        headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
-    });
+    const res = await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
     await new Promise(res => setTimeout(res, 1000));
     const $ = cheerio.load(res.data);
     const postId = uuidv4();
     const title = $('h1.entry-title').first().text()?.trim() as string;
-    console.info(title, "title");
+    const createdAt = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+    console.info("title", title);
 
-    // タイトルの重複チェック、ページ作成
-    const result = await docClient.send(new QueryCommand({
-        TableName: TABLE_NAME_IS01,
-        IndexName: "iS01sByTitle",
-        KeyConditionExpression: "#pk = :titleValue",
-        ExpressionAttributeNames: { "#pk": "title" },
-        ExpressionAttributeValues: { ":titleValue": title }
-    }));
+    // アイキャッチ、OGP画像取得
+    const ogImage = $('meta[property="og:image"]').attr("content") as string;
+    const ogImageRes = await getImage(ogImage, createdAt);
+    console.info("ogImageRes", ogImageRes);
 
-    // タイトルが既に存在する場合はスキップ
-    if (result.Count ?? 0 > 0) {
-        console.info(`Title "${title}" already exists in table ${TABLE_NAME_IS01}. Skipping.`);
-        return;
-    }
-
-    const transactWriteParams: TransactWriteCommandInput = { TransactItems: [] };
-    (transactWriteParams.TransactItems ?? []).push({
-        Put: {
-            TableName: TABLE_NAME_IS01,
+    // 投稿の登録（タイトルの重複チェック） 
+    const psotItem = await queryToDynamo(TABLE_NAME_IS_POSTS, "isPostsByTitle", "title = :title", { ":title": title });
+    if (!psotItem.length) {
+        await docClient.send(new PutCommand({
+            TableName: TABLE_NAME_IS_POSTS,
             Item: {
                 id: postId,
-                slug: await createSlug(title),
-                title: title,
+                slug: " ",
+                title,
+                thumbnail: ogImageRes.Key,
                 rewrittenTitle: "",
-                createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                __typename: "IS01"
-            } as IS01Input
-        },
-    });
+                createdAt,
+                updatedAt: createdAt,
+                __typename: "IsPosts"
+            }
+        }));
+    }
+
+    // スラッグの更新（重複チェック）
+    await updateSlugWithRetry(TABLE_NAME_IS_POSTS, postId, await createSlug(title));
     outputTitle.id = postId;
     outputTitle.title = title;
 
-    // カテゴリーの取得
-    const cats = $('.meta-box .category');
-    const promises = cats.map(async (i, el) => {
-        const name = $(el).text()?.trim() as string;
-        if (name && !name.includes("カテゴリの全記事一覧")) {
-            const result = await docClient.send(new QueryCommand({
-                TableName: TABLE_NAME_IS03,
-                IndexName: "iS03sByName",
-                KeyConditionExpression: "#pk = :nameValue",
-                ExpressionAttributeNames: { "#pk": "name" },
-                ExpressionAttributeValues: { ":nameValue": name }
-            }));
-            // カテゴリーが既に存在する場合はスキップ
-            if (result.Count ?? 0 > 0) {
-                console.info(`Category "${name}" already exists in table ${TABLE_NAME_IS03}. Skipping.`);
-                return;
-            }
-            (transactWriteParams.TransactItems ?? []).push({
-                Put: {
-                    TableName: TABLE_NAME_IS03,
+    // タームの取得
+    const terms = $('.meta-box span[itemprop="keywords"]');
+    const promises = terms.map(async (i, el) => {
+        const taxonomy = $(el).attr("class")?.trim() as string;
+        const names = $(el).find("a");
+        for (const nameEl of names) {
+            const name = $(nameEl).text()?.trim() as string;
+            if (name && taxonomy) {
+                // 投稿メタの登録
+                const termSlug = await createSlug(name);
+                await docClient.send(new PutCommand({
+                    TableName: TABLE_NAME_IS_POSTMETA,
                     Item: {
                         id: uuidv4(),
                         postId,
                         name,
-                        __typename: "IS03"
-                    } as IS03Input,
-                },
-            });
+                        slug: termSlug,
+                        taxonomy,
+                        createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                        updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                        __typename: "IsPostMeta"
+                    }
+                }));
+
+                // タームの登録（存在しない場合のみ）
+                const termItem = await queryToDynamo(TABLE_NAME_IS_TERMS, "isTermsBySlug", "slug = :slug", { ":slug": termSlug });
+                if (!termItem.length) {
+                    await docClient.send(new PutCommand({
+                        TableName: TABLE_NAME_IS_TERMS,
+                        Item: {
+                            id: uuidv4(),
+                            name,
+                            slug: termSlug,
+                            taxonomy,
+                            createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                            updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                            __typename: "IsTerms"
+                        }
+                    }));
+                }
+            }
         }
     });
     await Promise.all(promises);
-    console.info("TransactWrite params", JSON.stringify(transactWriteParams));
-    await docClient.send(new TransactWriteCommand(transactWriteParams));
 
     // コメントの取得
     const ths = $('#mainEntity .entry-title + div div.meta');
     const tds = $('#mainEntity .entry-title + div .message');
-    const is02Items: IS02Input[] = [];
+    const pushItems: IS_COMMENTS_INPUT[] = [];
     for (const [i, el] of Array.from(tds).entries()) {
         let ogImageRes = { Key: "", id: "" };
-        const dateText = $(ths[i]).children(".date").text()?.trim()
-            .replace(/\([^)]+\)/, "")
-            .replace(/\.\d+$/, "");
-        const parsed = dayjs(dateText, "YYYY/MM/DD HH:mm:ss", true);
-        const createdAt = parsed.isValid()
-            ? parsed.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]')
-            : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        const commentDate = $(ths[i]).text()?.trim().match(/\d{4}\/\d{2}\/\d{2}(?:\(.{1}\))? \d{2}:\d{2}:\d{2}\.\d{2}/) ?? [];
+        const createdAt = dayjs(commentDate[0] ?? "".replace(/\(.{1}\)/, ""), "YYYY/MM/DD HH:mm:ss")
+            .format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
         if (i === 0) {
             // アイキャッチ、OGP画像取得
             const ogImage = $('meta[property="og:image"]').attr("content") as string;
             ogImageRes = await getImage(ogImage, createdAt);
             console.info("ogImageRes", ogImageRes);
         }
-        $(ths[i]).find('span.postusername').remove();
-        const header = $(ths[i]).text()?.trim();
+        $(ths[i]).find('span.postusername').text(" : ");
+        const header = $(ths[i]).text()?.trim().replace(" ：名無し募集中。。。：", " : ").replace(".net", "");
         let content = $(el).html()?.trim();
         if (content?.includes("<img")) {
             // 画像が含まれている場合は、画像をS3に保存
             const imgSrc = $(el).find('img').attr('src') as string;
             if (imgSrc) {
                 const imageRes = await getImage(imgSrc, createdAt);
-                content = content.replace(imgSrc, `https://${BUCKET_NAME_IS01}.s3.amazonaws.com/${imageRes.Key}`);
+                content = content.replace(imgSrc, `https://${BUCKET_NAME_IS_01}.s3.amazonaws.com/${imageRes.Key}`);
             }
         }
         if (content) {
-            is02Items.push({
+            pushItems.push({
                 id: uuidv4(),
+                postId,
                 content,
-                postId: postId,
                 header,
-                thumbnail: ogImageRes.Key ?? "" as string,
                 createdAt,
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                __typename: "IS02"
-            } as IS02Input);
+                __typename: "IsComments"
+            } as IS_COMMENTS_INPUT);
         }
     }
+    // コメントの一括登録
+    await batchWriteItems(pushItems);
+    console.info("outputTitle", outputTitle);
+    return outputTitle;
+};
+
+// コメントをバッチ登録する関数
+async function batchWriteItems(items: IS_COMMENTS_INPUT[]) {
+    console.info("batchWriteItems IN:", items.length);
+    // バッチ分割
     const batches = [];
-    for (let i = 0; i < is02Items.length; i += MAX_BATCH_SIZE) {
-        batches.push(is02Items.slice(i, i + MAX_BATCH_SIZE));
+    for (let i = 0; i < items.length; i += MAX_BATCH_SIZE) {
+        batches.push(items.slice(i, i + MAX_BATCH_SIZE));
     }
     const putRequestsArray = batches.map(batch => ({
         RequestItems: {
-            [TABLE_NAME_IS02]: batch.map(item => ({
-                PutRequest: { Item: item as IS02Input },
+            [TABLE_NAME_IS_COMMENTS]: batch.map(item => ({
+                PutRequest: { Item: item as IS_COMMENTS_INPUT },
             })),
         },
     }));
-    const results: string[] = [];
+    // バッチごとに処理
     for (const params of putRequestsArray) {
         console.info("BatchWrite params", JSON.stringify(params));
-        await docClient.send(new BatchWriteCommand(params));
+        const result = await docClient.send(new BatchWriteCommand(params));
+        console.info("BatchWrite result", JSON.stringify(result));
+        // 未処理アイテムがあればリトライ
+        if (result.UnprocessedItems && Object.keys(result.UnprocessedItems).length > 0) {
+            let unprocessed = result.UnprocessedItems;
+            while (Object.keys(unprocessed).length > 0) {
+                await new Promise(res => setTimeout(res, 1000));
+                const retryParams = { RequestItems: unprocessed };
+                const retryResult = await docClient.send(new BatchWriteCommand(retryParams));
+                unprocessed = retryResult.UnprocessedItems || {};
+            }
+        }
     }
-    return outputTitle;
-};
+}
+
+
+async function queryToDynamo(
+    TableName: string,
+    IndexName: string,
+    KeyConditionExpression: string,
+    ExpressionAttributeValues: Record<string, any>
+) {
+    const outParam = [];
+    const params: QueryCommandInput = {
+        TableName,
+        IndexName,
+        KeyConditionExpression,
+        ExpressionAttributeValues,
+        Limit: 1
+    };
+    do {
+        const result = await docClient.send(new QueryCommand(params));
+        outParam.push(...result.Items ?? []);
+        params.ExclusiveStartKey = result.LastEvaluatedKey;
+    } while (params.ExclusiveStartKey);
+    return outParam;
+}
+
+// スラッグの重複チェックと更新
+async function updateSlugWithRetry(
+    TableName: string,
+    id: string,
+    baseSlug: string
+) {
+    console.info("updateSlugWithRetry IN:", TableName, id, baseSlug);
+    let slug = baseSlug;
+    let counter = 1;
+    const MAX_RETRY = 10;
+    while (counter <= MAX_RETRY) {
+        try {
+            await docClient.send(new UpdateCommand({
+                TableName: TABLE_NAME_IS_POSTS,
+                Key: { id },
+                UpdateExpression: "SET slug = :slug",
+                ExpressionAttributeValues: { ":slug": slug },
+            }));
+            return slug;
+        } catch (e: any) {
+            const errorType = e.name || e.Code || e.__type || "UnknownError";
+            console.info(`ErrorType: ${e.__type}`);
+            if (errorType.includes("ConditionalCheckFailedException")) {
+                counter++;
+                slug = `${baseSlug}-${counter}`;
+            } else {
+                throw e;
+            }
+        }
+    }
+    throw new Error("Failed to assign unique slug after max retries");
+}
 
 // S3に画像を保存する関数
 async function getImage(ogImage: string, date: string) {
@@ -238,7 +324,7 @@ async function getImage(ogImage: string, date: string) {
     const Key = `${dayjs(date).format("public/YYYY/MM/DD/")}${id}${ext}`;
     // PutObject パラメータ
     const putObjParam = {
-        Bucket: BUCKET_NAME_IS01,
+        Bucket: BUCKET_NAME_IS_01,
         Key,
         Body: Buffer.from(res.data),
     };
@@ -248,69 +334,36 @@ async function getImage(ogImage: string, date: string) {
     return { Key, id };
 }
 
+
 // スラッグを作成する関数
 async function createSlug(title: string) {
-    console.info("createSlug", title);
-    const prompt = `
-以下の日本語タイトルをURLスラッグに変換してください。
-タイトル: ${title}
-
-ルール：
-1. 文字をHepburn式ローマ字に変換
-2. スペースをハイフン（-）に置き換え
-3. 特殊文字（！、？、【】、絵文字など）を削除
-4. すべて小文字
-`;
-    const input = {
-        modelId: MODEL_ID,
-        contentType: "application/json",
-        accept: "application/json",
-        body: JSON.stringify({
-            inputText: prompt,
-            textGenerationConfig: {
-                maxTokenCount: 512,
-                temperature: 0.7,
-                topP: 0.9
-            }
-        })
-    };
-    const response = await bedrock.send(new InvokeModelCommand(input));
-    const data = JSON.parse(new TextDecoder().decode(response.body));
-    console.info("bedrock", data);
-    const rawText = data?.results?.[0]?.outputText || '';
-    let slug = await toUrlSlug(rawText);
-    console.info('slug', slug);
-    // 重複チェックを追加する
-    let baseSlug = slug;
-    let counter = 1;
-    let count = 0;
-    do {
-        const result = await docClient.send(new QueryCommand({
-            TableName: TABLE_NAME_IS01,
-            IndexName: "iS01sBySlug",
-            KeyConditionExpression: "#pk = :slugValue",
-            ExpressionAttributeNames: { "#pk": "slug" },
-            ExpressionAttributeValues: { ":slugValue": slug }
-        }));
-        count = result.Count ?? 0;
-        if (count > 0) slug = `${baseSlug}-${counter++}`;
-    } while (count > 0);
-    return slug;
+    console.info("createSlug IN:", title);
+    // 日本語をローマ字に変換
+    let slug = wanakana.toRomaji(title);
+    // 小文字化
+    slug = slug.toLowerCase();
+    // 英数字以外をハイフンに置換
+    slug = slug.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+    console.info("createSlug OUT:", JSON.stringify(slug));
+    return slug || title;
 };
 
-// 全角を削除する関数
-async function toUrlSlug(str: string) {
-    if (!str) return '';
-    return str
-        // ASCII以外を削除（全角文字や絵文字も含む）
-        .replace(/[^a-zA-Z0-9\s-]/g, '')
-        .trim()
-        .replace(/\s+/g, '-') // 空白→ハイフン
-        .toLowerCase();
-}
+
+// // 全角を削除する関数
+// async function toUrlSlug(str: string) {
+//     // 日本語をローマ字に変換
+//     str = wanakana.toRomaji(str);
+//     // 小文字化
+//     str = str.toLowerCase();
+//     // 英数字以外をハイフンに置換
+//     str = str.replace(/[^a-z0-9]+/g, "-");
+//     return str;
+// }
+
 
 // S3に格納する関数
 async function outPutS3(output: any, fileName: string) {
+    console.info("outPutS3 IN:", output, fileName);
     let newData = "";
     // if (listData.Contents) {
     //     for (const v of listData.Contents) {
@@ -322,21 +375,22 @@ async function outPutS3(output: any, fileName: string) {
         return JSON.stringify(item);
     }).join('\n');
     // コメントデータをS3に格納
-    await s3.send(
-        new PutObjectCommand({
-            Bucket: BUCKET_NAME_IS01,
-            Key: `private/original/${fileName}.jsonl`,
-            Body: newData,
-        })
-    );
+    const params = {
+        Bucket: BUCKET_NAME_IS_01,
+        Key: `private/edit/${fileName}.jsonl`,
+        Body: newData,
+    };
+    console.info("PutObject REQ", params);
+    await s3.send(new PutObjectCommand(params));
 }
+
 
 // S3からデータを取得する
 async function getObjetS3(Key: string) {
     try {
         const response = await s3.send(
             new GetObjectCommand({
-                Bucket: BUCKET_NAME_IS01,
+                Bucket: BUCKET_NAME_IS_01,
                 Key,
             }),
         );
@@ -344,11 +398,11 @@ async function getObjetS3(Key: string) {
     } catch (caught) {
         if (caught instanceof NoSuchKey) {
             console.error(
-                `Error from S3 while getting object "${Key}" from "${BUCKET_NAME_IS01}". No such key exists.`,
+                `Error from S3 while getting object "${Key}" from "${BUCKET_NAME_IS_01}". No such key exists.`,
             );
         } else if (caught instanceof S3ServiceException) {
             console.error(
-                `Error from S3 while getting object from ${BUCKET_NAME_IS01}.  ${caught.name}: ${caught.message}`,
+                `Error from S3 while getting object from ${BUCKET_NAME_IS_01}.  ${caught.name}: ${caught.message}`,
             );
         } else {
             throw caught;
@@ -356,6 +410,8 @@ async function getObjetS3(Key: string) {
     }
 }
 
+
+// タイトルの更新関数
 async function updateRewriteTitle(titleData: string) {
     const newTitleData = titleData.split('\n')
         .filter(line => line.trim() !== '')
@@ -365,7 +421,7 @@ async function updateRewriteTitle(titleData: string) {
         const transactWriteParams = {
             TransactItems: batch.map(item => ({
                 Update: {
-                    TableName: TABLE_NAME_IS01,
+                    TableName: TABLE_NAME_IS_POSTS,
                     Key: { id: item.id },
                     UpdateExpression: "SET rewrittenTitle = :rewrittenTitle",
                     ExpressionAttributeValues: { ":rewrittenTitle": item.rewrittenTitle },
@@ -377,6 +433,7 @@ async function updateRewriteTitle(titleData: string) {
     }
 }
 
+
 // ページネーション情報を作成する関数
 async function createPagenation() {
     const pagenation: { [key: number]: string | null; } = {};
@@ -385,7 +442,7 @@ async function createPagenation() {
 
     do {
         const params = {
-            TableName: TABLE_NAME_IS01,
+            TableName: TABLE_NAME_IS_POSTS,
             Limit: 5,
             ExclusiveStartKey: lastEvaluatedKey
         };
@@ -399,7 +456,7 @@ async function createPagenation() {
     // S3に保存
     await s3.send(
         new PutObjectCommand({
-            Bucket: BUCKET_NAME_IS01,
+            Bucket: BUCKET_NAME_IS_01,
             Key: `public/pagenation.json`,
             Body: JSON.stringify(pagenation, null, 2),
         })

@@ -15,37 +15,46 @@ interface PageProps {
     params: Promise<{ slug: string; }>; // paramsをPromiseでラップ
 }
 const SamplePage = async ({ params }: PageProps) => {
-
     const { slug } = await params;
     console.info("slug", slug);
-    const { data } = await cookiesClient.models.IS01.list({
-        filter: {
-            slug: { eq: slug }
-        },
-        selectionSet: [
-            "id",
-            "slug",
-            "title",
-            "rewrittenTitle",
-            "thumbnail",
-            "createdAt",
-            "categories.id",
-            "categories.name",
-            "comments.id",
-            "comments.header",
-            "comments.content",
-        ]
-    });
-    console.info("fetch data SamplePage:", data[0]);
+    const { data: postData } = await cookiesClient.models.IsPosts.listIsPostsBySlug(
+        { slug },
+        {
+            selectionSet: [
+                "id",
+                "slug",
+                "title",
+                "rewrittenTitle",
+                "thumbnail",
+                "createdAt",
+                "postmeta.id",
+                "postmeta.name"
+            ]
+        });
+    const postId = postData[0]?.id as string;
+    const { data: commentsData } = await cookiesClient.models.IsComments.listIsCommentsByPostIdAndCreatedAt(
+        { postId },
+        {
+            selectionSet: [
+                "id",
+                "createdAt",
+                "header",
+                "content",
+            ]
+        });
+    const data = { ...postData[0], comments: commentsData ?? [] };
+    console.info("fetch data postData:", postData);
+    console.info("fetch data commentsData:", commentsData);
+    const title = data.rewrittenTitle || data.title || "";
     return (
         <PageContainer
-            title={data[0].rewrittenTitle ?? "" as string}
+            title={title}
             description="this is Sample page"
         >
-            <DashboardCard title={data[0].rewrittenTitle ?? "" as string}>
+            <DashboardCard title={title}>
                 <Image
-                    src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data[0].thumbnail as string}`}
-                    alt={data[0].rewrittenTitle ?? "" as string}
+                    src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data.thumbnail as string}`}
+                    alt={title}
                     width={400}
                     height={250}
                     style={{
@@ -54,9 +63,9 @@ const SamplePage = async ({ params }: PageProps) => {
                         objectFit: 'cover'
                     }}
                 />
-                <Grid container spacing={3}>
+                <Grid container spacing={3} mt={2}>
                     {
-                        data[0].comments && data[0].comments.map((comment) => (
+                        data.comments && data.comments.map((comment) => (
                             <Grid key={comment.id} size={12}>
                                 <div style={{ fontWeight: "bold" }}>{comment.header ?? ""}</div>
                                 <div
