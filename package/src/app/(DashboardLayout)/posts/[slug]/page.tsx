@@ -9,7 +9,7 @@ import { JSDOM } from "jsdom";
 
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
-const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
+const bucketName01 = outputs?.storage?.bucket_name; // package/amplify_outputs.json
 
 interface PageProps {
   params: Promise<{ slug: string }>;

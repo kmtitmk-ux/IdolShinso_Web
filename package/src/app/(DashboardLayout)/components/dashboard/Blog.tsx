@@ -20,7 +20,7 @@ import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
 import Image from "next/image";
 import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
-const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
+const bucketName01 = outputs?.storage?.bucket_name; // package/amplify_outputs.json
 
 const Blog = ({ data }: { data: any; }) => {
     return (
