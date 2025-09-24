@@ -12,10 +12,9 @@ const LinkStyled = styled(Link)(() => ({
 const Logo = () => {
   return (
     <LinkStyled href="/">
-      <Image src="/images/logos/dark-logo.svg" alt="logo" height={70} width={174} priority />
+      <Image src="/images/logos/logo.svg" alt="logo" height={106} width={379} fill style={{ objectFit: 'contain' }} priority />
     </LinkStyled>
   );
 };
 
 export default Logo;
-  

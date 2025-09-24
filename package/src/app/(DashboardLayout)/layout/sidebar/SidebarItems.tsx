@@ -1,4 +1,5 @@
 "use client";
+import Image from "next/image";
 import React, { useEffect, useState } from "react";
 // import Menuitems from "./MenuItems";
 import {
@@ -126,7 +127,15 @@ const SidebarItems = () => {
     return (
         <>
             <MUI_Sidebar width={"100%"} showProfile={false} themeColor={"#5D87FF"} themeSecondaryColor={'#49beff'} >
-                <Logo img='/images/logos/dark-logo.svg' component={Link} to="/" >aaa</Logo>
+                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 2 }}>
+                    <Image
+                        src="/images/logos/logo.svg"
+                        alt="logo"
+                        height={80}
+                        width={250}
+                        priority
+                    />
+                </Box>
                 {renderMenuItems(menuitems, pathDirect)}
                 {/* <Box px={2}>
                     <Upgrade />

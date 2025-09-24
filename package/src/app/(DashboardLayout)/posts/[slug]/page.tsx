@@ -10,6 +10,28 @@ import { JSDOM } from "jsdom";
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
 const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
+interface PageProps {
+    params: Promise<{ slug: string; }>;
+}
+
+export async function generateMetadata({ params }: { params: { slug: string; }; }) {
+    const { slug } = await params;
+    const slugTaxonomy = `${slug}`;
+    const { data } = await cookiesClient.models.IsPosts.listIsPostsBySlug({
+        slug,
+    }, {
+        selectionSet: [
+            "title",
+            "rewrittenTitle"
+        ]
+    });
+    const title = data[0].rewrittenTitle || data[0].title;
+    const description = data[0].rewrittenTitle || data[0].title;
+    return {
+        title: `${title}｜アイドル深層`,
+        description: `${description}。アイドル深層`
+    };
+}
 
 interface PageProps {
     params: Promise<{ slug: string; }>; // paramsをPromiseでラップ
@@ -61,9 +83,10 @@ const SamplePage = async ({ params }: PageProps) => {
                         width: '40%',
                         height: 'auto',
                         objectFit: 'cover'
-                    }}
+                    }
+                    }
                 />
-                <Grid container spacing={3} mt={2}>
+                < Grid container spacing={3} mt={2} >
                     {
                         data.comments && data.comments.map((comment) => (
                             <Grid key={comment.id} size={12}>
@@ -76,9 +99,9 @@ const SamplePage = async ({ params }: PageProps) => {
                             </Grid>
                         ))
                     }
-                </Grid>
-            </DashboardCard>
-        </PageContainer>
+                </Grid >
+            </DashboardCard >
+        </PageContainer >
     );
 };
 

@@ -11,9 +11,18 @@ import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import MonthlyEarnings from '@/app/(DashboardLayout)/components/dashboard/MonthlyEarnings';
 import { downloadData } from 'aws-amplify/storage';
 import { cookiesClient } from "@/utils/amplifyServerUtils";
-
+export async function generateMetadata() {
+    return {
+        title: `アイドル深層｜推しの“今”を深く知る、アイドル情報メディア`,
+        description: `ライブレポート、メンバーインタビュー、最新ニュースまで──「アイドル深層」は、あなたの推し活をもっと濃くする情報を毎日更新。人気グループから注目の新星まで、アイドルの“今”を深層まで届けます。`
+    };
+}
 const Dashboard = async () => {
-    const { data, nextToken } = await cookiesClient.models.IsPosts.list({
+    const { data, nextToken, errors } = await cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt({
+        status: "published"
+    }, {
+        sortDirection: "DESC",
+        limit: 8,
         selectionSet: [
             "id",
             "slug",
@@ -26,8 +35,11 @@ const Dashboard = async () => {
             "postmeta.name",
             "postmeta.taxonomy"
         ],
-        limit: 1
     });
+    if (errors) {
+        console.error(errors);
+        return;
+    }
     const editData = data.map((item) => {
         return {
             id: item.id,

@@ -47,14 +47,16 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
         try {
             switch (queryType) {
                 case "category":
-                    res = await client.models.IsPostMeta.listIsPostMetaBySlugAndTaxonomy({
-                        slug: pk,
-                        taxonomy: { eq: "category" }
+                    res = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
+                        slugTaxonomy: pk
                     }, {
+                        sortDirection: "DESC",
+                        limit: 8,
                         nextToken: nextToken,
                         selectionSet: [
                             "post.id",
                             "post.slug",
+                            "post.status",
                             "post.title",
                             "post.rewrittenTitle",
                             "post.thumbnail",
@@ -74,12 +76,15 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                             }]
                         };
                         return outParam;
-                    });
+                    }).filter((item: any) => item.status === "published");
                     break;
                 default:
-                    res = await client.models.IsPosts.list({
+                    res = await client.models.IsPosts.listIsPostsByStatusAndCreatedAt({
+                        status: "published"
+                    }, {
+                        sortDirection: "DESC",
+                        limit: 8,
                         nextToken: nextToken,
-                        limit: 1,
                         selectionSet: [
                             "id",
                             "slug",
@@ -91,7 +96,7 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                             "postmeta.slug",
                             "postmeta.name",
                             "postmeta.taxonomy"
-                        ]
+                        ],
                     });
                     res.data = (res.data ?? []).map((item: any) => {
                         return {

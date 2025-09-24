@@ -35,5 +35,3 @@ export const myFirstFunction = defineFunction({
         MODEL_ID: process.env.MODEL_ID ?? selectedConfig.MODEL_ID
     }
 });
-
-export const MODEL_ID = envConfig[branch].MODEL_ID;

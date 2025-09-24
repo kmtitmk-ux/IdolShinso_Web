@@ -9,28 +9,33 @@ and "delete" any "Todo" records.
 const schema = a.schema({
     IsPosts: a
         .model({
-            title: a.string().required(),
-            slug: a.string().required(),
+            createdAt: a.datetime().required(),
             rewrittenTitle: a.string(),
+            slug: a.string().required(),
+            status: a.string().required(),
             thumbnail: a.string(),
+            title: a.string().required(),
             comments: a.hasMany('IsComments', 'postId'),
-            postmeta: a.hasMany('IsPostMeta', 'postId'),
+            postmeta: a.hasMany('IsPostMeta', 'postId')
         })
         .secondaryIndexes((index) => [
             index('title'),
             index('slug'),
+            index('status').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest()]),
     IsPostMeta: a
         .model({
+            createdAt: a.datetime().required(),
             postId: a.id(),
             name: a.string().required(),
             slug: a.string().required(),
             taxonomy: a.string().required(),
             post: a.belongsTo('IsPosts', 'postId'),
+            slugTaxonomy: a.string().required()
         })
         .secondaryIndexes((index) => [
-            index('slug').sortKeys(['taxonomy'])
+            index('slugTaxonomy').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest()]),
     IsTerms: a

@@ -44,6 +44,7 @@
     "@aws-amplify/backend-cli": "^1.8.0",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "4.14.196",
+    "@types/react-helmet": "^6.1.11",
     "@types/react-syntax-highlighter": "^15.5.13",
     "aws-cdk-lib": "^2.204.0",
     "constructs": "^10.4.2",

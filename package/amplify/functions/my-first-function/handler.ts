@@ -2,27 +2,20 @@ import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import {
     BatchWriteCommand,
     PutCommand,
-    QueryCommand,
-    UpdateCommand,
-    TransactWriteCommand,
-    TransactWriteCommandInput,
-    DynamoDBDocumentClient,
     PutCommandInput,
-    QueryCommandInput
+    QueryCommand,
+    QueryCommandInput,
+    UpdateCommand,
+    UpdateCommandInput,
+    DynamoDBDocumentClient
 } from "@aws-sdk/lib-dynamodb";
 import {
     S3Client,
     PutObjectCommand,
     GetObjectCommand,
-    ListObjectsV2Command,
     NoSuchKey,
     S3ServiceException
 } from "@aws-sdk/client-s3";
-import {
-    BedrockRuntimeClient,
-    InvokeModelCommand,
-    InvokeModelCommandInput,
-} from "@aws-sdk/client-bedrock-runtime";
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
@@ -30,50 +23,49 @@ import { Schema } from '../../data/resource';
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import wanakana from "wanakana";
-
 import type { Handler } from 'aws-lambda';
 
 dayjs.extend(customParseFormat);
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3 = new S3Client({});
-const bedrock = new BedrockRuntimeClient();
 const BUCKET_NAME_IS_01 = process.env.BUCKET_NAME_IS_01 as string;
 const TABLE_NAME_IS_POSTS = process.env.TABLE_NAME_IS_POSTS as string;
 const TABLE_NAME_IS_POSTMETA = process.env.TABLE_NAME_IS_POSTMETA as string;
 const TABLE_NAME_IS_TERMS = process.env.TABLE_NAME_IS_TERMS as string;
 const TABLE_NAME_IS_COMMENTS = process.env.TABLE_NAME_IS_COMMENTS as string;
-const MODEL_ID = process.env.MODEL_ID as string;
 const MAX_BATCH_SIZE = 25;
 
-type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
-type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
-type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
+// type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
+// type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
+// type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
 type IS_COMMENTS_INPUT = Pick<Schema['IsComments']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsComments'; };
-
+type OutputResult = {
+    id: string;
+    title: string;
+    rewrittenTitle: string;
+};
 export const handler: Handler = async (event: any) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
     switch (event.procType) {
         case "scrapingContent":
+            const outputResults: OutputResult[] = [];
             const url = 'https://hpupdate.info/';
             console.info("axios", url);
             const res = await axios.get(url, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
             await new Promise(res => setTimeout(res, 1000));
             const $ = cheerio.load(res.data);
-            const titles = $('a.entry-link');
-            const hrefs: string[] = [];
-            titles.each((i, el) => {
-                if (i < 5) {
-                    const href = $(el).attr('href') as string;
-                    if (href) hrefs.push(href);
-                    const text = $(el).text();
-                }
-            });
-            const outputTitles = await Promise.all(hrefs.map(href => scrapingContent(href)));
-            if (outputTitles) await outPutS3(outputTitles, "title");
+            const titles = $('a.entry-link').slice(0, 10);
+            for (const el of titles.toArray()) {
+                const href = $(el).attr('href');
+                const title = $(el).text().trim();
+                if (!href) continue;
+                await scrapingContent(href, title, outputResults);
+            }
+            await outPutS3(outputResults, "title");
             break;
         case "updateRewriteTitle":
-            const titleData = await getObjetS3("private/edit/title.jsonl") as string;
+            const titleData = await getObjetS3(`private/edit/title-${dayjs().format("YYYYMMDD")}.jsonl`) as string;
             if (titleData) await updateRewriteTitle(titleData);
             break;
     }
@@ -84,48 +76,45 @@ export const handler: Handler = async (event: any) => {
 };
 
 
-async function scrapingContent(link: string) {
-    const outputTitle = {
-        id: "",
-        title: "",
-        rewrittenTitle: ""
-    };
+async function scrapingContent(link: string, title: string, outputResults: OutputResult[]) {
+    const psotItem = await queryToDynamo(TABLE_NAME_IS_POSTS, "isPostsByTitle", "title = :title", { ":title": title });
+    if (psotItem.length) return;
+
     console.info("axios", link);
     const res = await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
     await new Promise(res => setTimeout(res, 1000));
-    const $ = cheerio.load(res.data);
     const postId = uuidv4();
-    const title = $('h1.entry-title').first().text()?.trim() as string;
     const createdAt = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
-    console.info("title", title);
+    const $ = cheerio.load(res.data);
 
     // アイキャッチ、OGP画像取得
     const ogImage = $('meta[property="og:image"]').attr("content") as string;
     const ogImageRes = await getImage(ogImage, createdAt);
     console.info("ogImageRes", ogImageRes);
 
+    // スラッグ作成
+    let slug = await createSlug(title);
+    slug = await checkSlugWithRetry(slug, TABLE_NAME_IS_POSTS, "isPostsBySlug", "slug = :slug");
+
     // 投稿の登録（タイトルの重複チェック） 
-    const psotItem = await queryToDynamo(TABLE_NAME_IS_POSTS, "isPostsByTitle", "title = :title", { ":title": title });
     if (!psotItem.length) {
-        await docClient.send(new PutCommand({
+        const param: PutCommandInput = {
             TableName: TABLE_NAME_IS_POSTS,
             Item: {
                 id: postId,
-                slug: " ",
+                slug,
                 title,
+                status: "draft",
                 thumbnail: ogImageRes.Key,
                 rewrittenTitle: "",
                 createdAt,
                 updatedAt: createdAt,
                 __typename: "IsPosts"
             }
-        }));
+        };
+        console.info("PutCommand param", param);
+        await docClient.send(new PutCommand(param));
     }
-
-    // スラッグの更新（重複チェック）
-    await updateSlugWithRetry(TABLE_NAME_IS_POSTS, postId, await createSlug(title));
-    outputTitle.id = postId;
-    outputTitle.title = title;
 
     // タームの取得
     const terms = $('.meta-box span[itemprop="keywords"]');
@@ -136,36 +125,42 @@ async function scrapingContent(link: string) {
             const name = $(nameEl).text()?.trim() as string;
             if (name && taxonomy) {
                 // 投稿メタの登録
-                const termSlug = await createSlug(name);
-                await docClient.send(new PutCommand({
+                const slug = await createSlug(name);
+                const slugTaxonomy = `${slug}_${taxonomy}`;
+                const param: PutCommandInput = {
                     TableName: TABLE_NAME_IS_POSTMETA,
                     Item: {
                         id: uuidv4(),
                         postId,
                         name,
-                        slug: termSlug,
+                        slug,
                         taxonomy,
+                        slugTaxonomy,
                         createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                         updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                         __typename: "IsPostMeta"
                     }
-                }));
+                };
+                console.info("PutCommand parma", param);
+                await docClient.send(new PutCommand(param));
 
                 // タームの登録（存在しない場合のみ）
-                const termItem = await queryToDynamo(TABLE_NAME_IS_TERMS, "isTermsBySlug", "slug = :slug", { ":slug": termSlug });
+                const termItem = await queryToDynamo(TABLE_NAME_IS_TERMS, "isTermsBySlug", "slug = :slug", { ":slug": slug });
                 if (!termItem.length) {
-                    await docClient.send(new PutCommand({
+                    const param: PutCommandInput = {
                         TableName: TABLE_NAME_IS_TERMS,
                         Item: {
                             id: uuidv4(),
                             name,
-                            slug: termSlug,
+                            slug,
                             taxonomy,
                             createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                             updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                             __typename: "IsTerms"
                         }
-                    }));
+                    };
+                    console.info("PutCommand parma", param);
+                    await docClient.send(new PutCommand(param));
                 }
             }
         }
@@ -178,9 +173,11 @@ async function scrapingContent(link: string) {
     const pushItems: IS_COMMENTS_INPUT[] = [];
     for (const [i, el] of Array.from(tds).entries()) {
         let ogImageRes = { Key: "", id: "" };
-        const commentDate = $(ths[i]).text()?.trim().match(/\d{4}\/\d{2}\/\d{2}(?:\(.{1}\))? \d{2}:\d{2}:\d{2}\.\d{2}/) ?? [];
-        const createdAt = dayjs(commentDate[0] ?? "".replace(/\(.{1}\)/, ""), "YYYY/MM/DD HH:mm:ss")
-            .format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+        const commentDateText = $(ths[i]).text()?.trim().match(/\d{4}\/\d{2}\/\d{2}(?:\(.{1}\))? \d{2}:\d{2}:\d{2}\.\d{2}/) ?? [];
+        const commentDate = dayjs(commentDateText[0] ?? "".replace(/\(.{1}\)/, ""), "YYYY/MM/DD HH:mm:ss");
+        const createdAt = commentDate.isValid()
+            ? commentDate.format('YYYY-MM-DDTHH:mm:ss.SSS[Z]')
+            : dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
         if (i === 0) {
             // アイキャッチ、OGP画像取得
             const ogImage = $('meta[property="og:image"]').attr("content") as string;
@@ -188,7 +185,10 @@ async function scrapingContent(link: string) {
             console.info("ogImageRes", ogImageRes);
         }
         $(ths[i]).find('span.postusername').text(" : ");
-        const header = $(ths[i]).text()?.trim().replace(" ：名無し募集中。。。：", " : ").replace(".net", "");
+        let header = $(ths[i]).text()?.trim().replace(" ：名無し募集中。。。：", " : ").replace(".net", "");
+        if (!header || header === ":") {
+            header = `${Array.from(tds).length - i} : ${dayjs().format("YYYY/MM/DD(dd) HH:mm:ss.SS")}`;
+        }
         let content = $(el).html()?.trim();
         if (content?.includes("<img")) {
             // 画像が含まれている場合は、画像をS3に保存
@@ -198,7 +198,7 @@ async function scrapingContent(link: string) {
                 content = content.replace(imgSrc, `https://${BUCKET_NAME_IS_01}.s3.amazonaws.com/${imageRes.Key}`);
             }
         }
-        if (content) {
+        if (!content?.includes("スポンサーリンク")) {
             pushItems.push({
                 id: uuidv4(),
                 postId,
@@ -210,10 +210,16 @@ async function scrapingContent(link: string) {
             } as IS_COMMENTS_INPUT);
         }
     }
+
     // コメントの一括登録
     await batchWriteItems(pushItems);
-    console.info("outputTitle", outputTitle);
-    return outputTitle;
+
+    // 返却
+    outputResults.push({
+        id: postId,
+        title: title,
+        rewrittenTitle: ""
+    });
 };
 
 // コメントをバッチ登録する関数
@@ -233,9 +239,9 @@ async function batchWriteItems(items: IS_COMMENTS_INPUT[]) {
     }));
     // バッチごとに処理
     for (const params of putRequestsArray) {
-        console.info("BatchWrite params", JSON.stringify(params));
+        console.info("BatchWriteCommand params", JSON.stringify(params));
         const result = await docClient.send(new BatchWriteCommand(params));
-        console.info("BatchWrite result", JSON.stringify(result));
+        console.info("BatchWriteCommand result", JSON.stringify(result));
         // 未処理アイテムがあればリトライ
         if (result.UnprocessedItems && Object.keys(result.UnprocessedItems).length > 0) {
             let unprocessed = result.UnprocessedItems;
@@ -257,7 +263,7 @@ async function queryToDynamo(
     ExpressionAttributeValues: Record<string, any>
 ) {
     const outParam = [];
-    const params: QueryCommandInput = {
+    const param: QueryCommandInput = {
         TableName,
         IndexName,
         KeyConditionExpression,
@@ -265,44 +271,31 @@ async function queryToDynamo(
         Limit: 1
     };
     do {
-        const result = await docClient.send(new QueryCommand(params));
+        console.info("QueryCommand param", param);
+        const result = await docClient.send(new QueryCommand(param));
+        console.info("QueryCommand result", result);
         outParam.push(...result.Items ?? []);
-        params.ExclusiveStartKey = result.LastEvaluatedKey;
-    } while (params.ExclusiveStartKey);
+        param.ExclusiveStartKey = result.LastEvaluatedKey;
+    } while (param.ExclusiveStartKey);
     return outParam;
 }
 
 // スラッグの重複チェックと更新
-async function updateSlugWithRetry(
-    TableName: string,
-    id: string,
-    baseSlug: string
+async function checkSlugWithRetry(
+    slug: string,
+    tableName: string,
+    indexName: string,
+    keyConditionExpression: string,
 ) {
-    console.info("updateSlugWithRetry IN:", TableName, id, baseSlug);
-    let slug = baseSlug;
-    let counter = 1;
-    const MAX_RETRY = 10;
-    while (counter <= MAX_RETRY) {
-        try {
-            await docClient.send(new UpdateCommand({
-                TableName: TABLE_NAME_IS_POSTS,
-                Key: { id },
-                UpdateExpression: "SET slug = :slug",
-                ExpressionAttributeValues: { ":slug": slug },
-            }));
-            return slug;
-        } catch (e: any) {
-            const errorType = e.name || e.Code || e.__type || "UnknownError";
-            console.info(`ErrorType: ${e.__type}`);
-            if (errorType.includes("ConditionalCheckFailedException")) {
-                counter++;
-                slug = `${baseSlug}-${counter}`;
-            } else {
-                throw e;
-            }
-        }
+    const baseSlug = slug;
+    let counter = 0;
+    while (true) {
+        const result = await queryToDynamo(tableName, indexName, keyConditionExpression, { ":slug": slug });
+        if (result.length === 0) break;
+        counter++;
+        slug = `${baseSlug}-${counter}`;
     }
-    throw new Error("Failed to assign unique slug after max retries");
+    return slug;
 }
 
 // S3に画像を保存する関数
@@ -345,20 +338,9 @@ async function createSlug(title: string) {
     // 英数字以外をハイフンに置換
     slug = slug.replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
     console.info("createSlug OUT:", JSON.stringify(slug));
-    return slug || title;
+    if (!slug) slug = title;
+    return slug;
 };
-
-
-// // 全角を削除する関数
-// async function toUrlSlug(str: string) {
-//     // 日本語をローマ字に変換
-//     str = wanakana.toRomaji(str);
-//     // 小文字化
-//     str = str.toLowerCase();
-//     // 英数字以外をハイフンに置換
-//     str = str.replace(/[^a-z0-9]+/g, "-");
-//     return str;
-// }
 
 
 // S3に格納する関数
@@ -416,50 +398,23 @@ async function updateRewriteTitle(titleData: string) {
     const newTitleData = titleData.split('\n')
         .filter(line => line.trim() !== '')
         .map(line => JSON.parse(line));
-    for (let i = 0; i < newTitleData.length; i += MAX_BATCH_SIZE) {
-        const batch = newTitleData.slice(i, i + MAX_BATCH_SIZE);
-        const transactWriteParams = {
-            TransactItems: batch.map(item => ({
-                Update: {
-                    TableName: TABLE_NAME_IS_POSTS,
-                    Key: { id: item.id },
-                    UpdateExpression: "SET rewrittenTitle = :rewrittenTitle",
-                    ExpressionAttributeValues: { ":rewrittenTitle": item.rewrittenTitle },
-                }
-            }))
-        };
-        console.info("TransactWrite params", JSON.stringify(transactWriteParams));
-        await docClient.send(new TransactWriteCommand(transactWriteParams));
-    }
-}
-
-
-// ページネーション情報を作成する関数
-async function createPagenation() {
-    const pagenation: { [key: number]: string | null; } = {};
-    let lastEvaluatedKey: { [key: string]: any; } | undefined = undefined;
-    let currentPage = 1;
-
-    do {
-        const params = {
+    for (const v of newTitleData) {
+        const param: UpdateCommandInput = {
             TableName: TABLE_NAME_IS_POSTS,
-            Limit: 5,
-            ExclusiveStartKey: lastEvaluatedKey
+            Key: { id: v.id },
+            UpdateExpression: "SET #rewrittenTitle = :rewrittenTitle, #status = :status",
+            ExpressionAttributeNames: {
+                "#rewrittenTitle": "rewrittenTitle",
+                "#status": "status"
+            },
+            ExpressionAttributeValues: {
+                ":rewrittenTitle": v.rewrittenTitle,
+                ":status": "published"
+            },
+            ConditionExpression: "attribute_exists(id)",
+            ReturnValues: "UPDATED_NEW"
         };
-        const result: any = await docClient.send(new QueryCommand(params));
-        console.info(`Fetched page ${currentPage} with ${result.Items?.length || 0} items.`);
-        pagenation[currentPage] = result.LastEvaluatedKey ? result.LastEvaluatedKey : null;
-        lastEvaluatedKey = result.LastEvaluatedKey;
-        currentPage++;
-    } while (lastEvaluatedKey);
-
-    // S3に保存
-    await s3.send(
-        new PutObjectCommand({
-            Bucket: BUCKET_NAME_IS_01,
-            Key: `public/pagenation.json`,
-            Body: JSON.stringify(pagenation, null, 2),
-        })
-    );
-    console.info("Pagenation data saved to S3:", JSON.stringify(pagenation, null, 2));
+        console.info("Update param", JSON.stringify(param));
+        await docClient.send(new UpdateCommand(param));
+    }
 }
