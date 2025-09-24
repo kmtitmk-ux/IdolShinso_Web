@@ -1,6 +1,7 @@
 import { defineFunction } from "@aws-amplify/backend";
+import { PolicyStatement } from 'aws-cdk-lib/aws-iam';
 
-const envConfig = {
+export const envConfig = {
     main: {
         TABLE_NAME_IS_POSTS: "IsPosts-lwae74brlvfstbdkoxvvvdcofq-NONE",
         TABLE_NAME_IS_POSTMETA: "IsPostMeta-lwae74brlvfstbdkoxvvvdcofq-NONE",
