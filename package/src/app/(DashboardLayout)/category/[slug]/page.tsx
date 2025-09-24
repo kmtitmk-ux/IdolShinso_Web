@@ -34,9 +34,9 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '@/amplify/data/resource';
 
 interface PageProps {
-    params: Promise<{ slug: string; }>;
+  params: Promise<{ slug: string }>;
 }
-export async function generateMetadata({ params }: { params: { slug: string; }; }) {
+export async function generateMetadata({ params }: PageProps) {
     const { slug } = await params;
     const slugTaxonomy = `${slug}_category`;
     const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
@@ -52,7 +52,6 @@ export async function generateMetadata({ params }: { params: { slug: string; }; 
         description: `【${data[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
     };
 }
-
 const Category = async ({ params }: PageProps) => {
     const { slug } = await params;
     console.info("slug", decodeURIComponent(slug));

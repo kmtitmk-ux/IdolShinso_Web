@@ -10,11 +10,11 @@ import { JSDOM } from "jsdom";
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
 const bucketName01 = outputs.storage.bucket_name; // package/amplify_outputs.json
-interface PageProps {
-    params: Promise<{ slug: string; }>;
-}
 
-export async function generateMetadata({ params }: { params: { slug: string; }; }) {
+interface PageProps {
+  params: Promise<{ slug: string }>;
+}
+export async function generateMetadata({ params }: PageProps) {
     const { slug } = await params;
     const slugTaxonomy = `${slug}`;
     const { data } = await cookiesClient.models.IsPosts.listIsPostsBySlug({
@@ -31,10 +31,6 @@ export async function generateMetadata({ params }: { params: { slug: string; }; 
         title: `${title}｜アイドル深層`,
         description: `${description}。アイドル深層`
     };
-}
-
-interface PageProps {
-    params: Promise<{ slug: string; }>; // paramsをPromiseでラップ
 }
 const SamplePage = async ({ params }: PageProps) => {
     const { slug } = await params;
