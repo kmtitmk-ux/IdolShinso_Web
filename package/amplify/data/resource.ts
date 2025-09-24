@@ -6,15 +6,38 @@ adding a new "isDone" field as a boolean. The authorization rule below
 specifies that any unauthenticated user can "create", "read", "update", 
 and "delete" any "Todo" records.
 =========================================================================*/
+
+const IsPosts = {
+    createdAt: a.datetime().required(),
+    rewrittenTitle: a.string(),
+    slug: a.string().required(),
+    status: a.string().required(),
+    thumbnail: a.string(),
+    title: a.string().required()
+};
+const IsPostMeta = {
+    createdAt: a.datetime().required(),
+    postId: a.id(),
+    name: a.string().required(),
+    slug: a.string().required(),
+    taxonomy: a.string().required(),
+    slugTaxonomy: a.string().required()
+};
+const IsTerms = {
+    name: a.string().required(),
+    slug: a.string().required(),
+    taxonomy: a.string().required()
+};
+const IsComments = {
+    postId: a.id(),
+    header: a.string(),
+    content: a.string(),
+    createdAt: a.datetime().required()
+};
 const schema = a.schema({
     IsPosts: a
         .model({
-            createdAt: a.datetime().required(),
-            rewrittenTitle: a.string(),
-            slug: a.string().required(),
-            status: a.string().required(),
-            thumbnail: a.string(),
-            title: a.string().required(),
+            ...IsPosts,
             comments: a.hasMany('IsComments', 'postId'),
             postmeta: a.hasMany('IsPostMeta', 'postId')
         })
@@ -26,24 +49,15 @@ const schema = a.schema({
         .authorization((allow) => [allow.guest()]),
     IsPostMeta: a
         .model({
-            createdAt: a.datetime().required(),
-            postId: a.id(),
-            name: a.string().required(),
-            slug: a.string().required(),
-            taxonomy: a.string().required(),
+            ...IsPostMeta,
             post: a.belongsTo('IsPosts', 'postId'),
-            slugTaxonomy: a.string().required()
         })
         .secondaryIndexes((index) => [
             index('slugTaxonomy').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest()]),
     IsTerms: a
-        .model({
-            name: a.string().required(),
-            slug: a.string().required(),
-            taxonomy: a.string().required(),
-        })
+        .model({ ...IsTerms })
         .secondaryIndexes((index) => [
             index('slug'),
             index('taxonomy')
@@ -51,11 +65,46 @@ const schema = a.schema({
         .authorization((allow) => [allow.guest()]),
     IsComments: a
         .model({
-            postId: a.id(),
-            header: a.string(),
-            content: a.string(),
-            createdAt: a.datetime().required(),
+            ...IsComments,
             post: a.belongsTo('IsPosts', 'postId')
+        })
+        .secondaryIndexes((index) => [
+            index('postId').sortKeys(['createdAt'])
+        ])
+        .authorization((allow) => [allow.guest()]),
+
+    IsPostsEn: a
+        .model({
+            ...IsPosts,
+            comments: a.hasMany('IsCommentsEn', 'postId'),
+            postmeta: a.hasMany('IsPostMetaEn', 'postId')
+        })
+        .secondaryIndexes((index) => [
+            index('title'),
+            index('slug'),
+            index('status').sortKeys(['createdAt'])
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsPostMetaEn: a
+        .model({
+            ...IsPostMeta,
+            post: a.belongsTo('IsPostsEn', 'postId'),
+        })
+        .secondaryIndexes((index) => [
+            index('slugTaxonomy').sortKeys(['createdAt'])
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsTermsEn: a
+        .model({ ...IsTerms })
+        .secondaryIndexes((index) => [
+            index('slug'),
+            index('taxonomy')
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsCommentsEn: a
+        .model({
+            ...IsComments,
+            post: a.belongsTo('IsPostsEn', 'postId')
         })
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
