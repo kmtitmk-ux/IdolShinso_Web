@@ -49,9 +49,10 @@ const eventBusRole = new Role(eventStack, "LambdaInvokeRole", {
 
 type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
+const ruleName = process.env.RULE_NAME_IS_01 ?? `broadcastOrderStatusChange-${branch}`;
 const rule = new aws_events.CfnRule(eventStack, "MyOrderRule", {
     eventBusName: eventBus.eventBusName,
-    name: process.env.RULE_NAME_IS_01 ?? `broadcastOrderStatusChange-${branch}`,
+    name: ruleName,
     state: process.env.RULE_NAME_IS_01 ? "DISABLED" : "ENABLED",
     scheduleExpression: "cron(0 0 ? * * *)",
     targets: [
@@ -63,6 +64,7 @@ const rule = new aws_events.CfnRule(eventStack, "MyOrderRule", {
         }
     ]
 });
+
 
 // 関数のIAMロールにポリシーをアタッチ
 const functionRole = backend.myFirstFunction.resources.lambda.role;
