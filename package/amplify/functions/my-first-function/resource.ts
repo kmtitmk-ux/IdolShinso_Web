@@ -13,7 +13,7 @@ export const envConfig = {
         TABLE_NAME_IS_POSTMETA: "IsPostMeta-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
         TABLE_NAME_IS_TERMS: "IsTerms-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
         TABLE_NAME_IS_COMMENTS: "IsComments-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
-        BUCKET_NAME_IS_01: "amplify-dtb1zhx1jvcon-develop-b-is01bucketd5d9d3bb-xytrkowiqmzx"
+        BUCKET_NAME_IS_01: "amplify-dtb1zhx1jvcon-develop-b-is01bucketd5d9d3bb-evfat46goxx2"
     }
 };
 type Branch = "main" | "develop";
