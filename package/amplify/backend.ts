@@ -32,38 +32,55 @@ const eventBus = aws_events.EventBus.fromEventBusName(
 );
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
 
+const lambdaFunction = backend.myFirstFunction.resources.cfnResources.cfnFunction;
 const policyStatement = new PolicyStatement({
     effect: Effect.ALLOW,
     actions: ["lambda:InvokeFunction"],
-    resources: [backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn],
+    resources: [lambdaFunction.attrArn],
 });
+// Lambda 関数の ARN を取得
 
-const eventBusRole = new Role(eventStack, "LambdaInvokeRole", {
+// IAM ロールを作成（EventBridge が Lambda を呼び出す権限）
+const eventBusRole = new Role(eventStack, "EventBridgeInvokeLambdaRole", {
     assumedBy: new ServicePrincipal("events.amazonaws.com"),
     inlinePolicies: {
-        PolicyStatement: new PolicyDocument({
-            statements: [policyStatement],
+        LambdaInvokePolicy: new PolicyDocument({
+            statements: [
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: ["lambda:InvokeFunction"],
+                    resources: [lambdaFunction.attrArn],
+                }),
+            ],
         }),
     },
 });
 
 type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
-const ruleName = process.env.RULE_NAME_IS_01 ?? `broadcastOrderStatusChange-${branch}`;
-const rule = new aws_events.CfnRule(eventStack, "MyOrderRule", {
+// EventBridge ルールを作成
+const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
-    name: ruleName,
-    state: process.env.RULE_NAME_IS_01 ? "DISABLED" : "ENABLED",
-    scheduleExpression: "cron(0 0 ? * * *)",
+    name: "processOrderStatusChange",
+    eventPattern: {
+        source: ["amplify.orders"],
+        "detail-type": ["OrderStatusChange"],
+        detail: {
+            orderId: [{ exists: true }],
+            status: ["PENDING", "SHIPPED", "DELIVERED"],
+            message: [{ exists: true }],
+        },
+    },
     targets: [
         {
-            id: "orderStatusChangeReceiver",
-            arn: backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn,
+            id: "ProcessOrderTarget",
+            arn: lambdaFunction.attrArn,
             roleArn: eventBusRole.roleArn,
             input: JSON.stringify({ procType: "scrapingContent" })
-        }
-    ]
+        },
+    ],
 });
+
 
 
 // 関数のIAMロールにポリシーをアタッチ
@@ -97,3 +114,4 @@ functionRole?.addToPrincipalPolicy(
         resources: [`arn:aws:s3:::${s3BucketName}/*`],
     })
 );
+
