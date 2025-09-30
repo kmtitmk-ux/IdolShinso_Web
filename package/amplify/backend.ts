@@ -56,12 +56,13 @@ const eventBusRole = new Role(eventStack, "EventBridgeInvokeLambdaRole", {
     },
 });
 
+const appId = process.env.AWS_APP_ID || "dtb1zhx1jvcon";
 type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 // EventBridge ルールを作成
 const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
-    name: "processOrderStatusChange",
+    name: `processOrderStatusChange-${appId}-${branch}`,
     eventPattern: {
         source: ["amplify.orders"],
         "detail-type": ["OrderStatusChange"],
