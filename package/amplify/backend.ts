@@ -21,7 +21,7 @@ export const backend = defineBackend({
     auth,
     data,
     myFirstFunction,
-    storage
+    // storage
 });
 
 const eventStack = backend.createStack("MyExternalDataSources");
