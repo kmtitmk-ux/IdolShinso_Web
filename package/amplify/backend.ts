@@ -63,15 +63,7 @@ const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
     name: `processOrderStatusChange-${appId}-${branch}`,
-    eventPattern: {
-        source: ["amplify.orders"],
-        "detail-type": ["OrderStatusChange"],
-        detail: {
-            orderId: [{ exists: true }],
-            status: ["PENDING", "SHIPPED", "DELIVERED"],
-            message: [{ exists: true }],
-        },
-    },
+    scheduleExpression: "cron(0 0 ? * * *)",
     targets: [
         {
             id: "ProcessOrderTarget",
