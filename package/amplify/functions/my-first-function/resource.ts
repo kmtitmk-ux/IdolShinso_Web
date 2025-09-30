@@ -6,7 +6,7 @@ export const envConfig = {
         TABLE_NAME_IS_POSTMETA: "IsPostMeta-lwae74brlvfstbdkoxvvvdcofq-NONE",
         TABLE_NAME_IS_TERMS: "IsTerms-lwae74brlvfstbdkoxvvvdcofq-NONE",
         TABLE_NAME_IS_COMMENTS: "IsComments-lwae74brlvfstbdkoxvvvdcofq-NONE",
-        BUCKET_NAME_IS_01: "amplify-dtb1zhx1jvcon-main-bran-is01bucketd5d9d3bb-pxrydzwv0aeo",
+        BUCKET_NAME_IS_01: "amplify-dtb1zhx1jvcon-main-bran-is01bucketd5d9d3bb-q8ierlcpxzjp",
     },
     develop: {
         TABLE_NAME_IS_POSTS: "IsPosts-o4ipk765lnd2fm3ecrgqjnhbsq-NONE",
