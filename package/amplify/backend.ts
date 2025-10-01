@@ -62,7 +62,7 @@ const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 // EventBridge ルールを作成
 const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
-    name: `processOrderStatusChange-${appId}-${branch}`,
+    name: process.env.RULE_NAME_IS_01 ?? `processOrderStatusChange-${appId}-${branch}`,
     scheduleExpression: "cron(0 0 ? * * *)",
     targets: [
         {
@@ -95,7 +95,6 @@ functionRole?.addToPrincipalPolicy(
         ],
     })
 );
-
 const s3BucketName = process.env.BUCKET_NAME_IS_01 || envConfig[branch]?.BUCKET_NAME_IS_01;
 functionRole?.addToPrincipalPolicy(
     new PolicyStatement({
@@ -103,8 +102,12 @@ functionRole?.addToPrincipalPolicy(
         actions: [
             's3:PutObject',
             's3:GetObject',
+            's3:ListBucket'
         ],
-        resources: [`arn:aws:s3:::${s3BucketName}/*`],
+        resources: [
+            `arn:aws:s3:::${s3BucketName}/`,
+            `arn:aws:s3:::${s3BucketName}/*`
+        ],
     })
 );
 

@@ -40,13 +40,14 @@ const MAIN_CONTENT_PROMPT = `
 それぞれの "title" を、SEO対策とCTA（行動喚起）を意識して魅力的にリライトしてください。
 リライトしたタイトルは "rewrittenTitle" キーに格納してください。
 
-【リライトのルール】
+リライトのルール:
 - 検索されやすいキーワードを含める（例：人物名、話題、地域、目的、数字など）
 - 読者の行動を促す表現を加える（例：「必見」「保存版」「今すぐ」「簡単に」「チェック」など）
 - ターゲット読者が明確になるようにする（例：「初心者向け」「ファン必見」など）
 - 文字数は全角で28〜32文字程度を目安に、自然で読みやすい日本語にする
 - 元のタイトルの話題性は維持すること
-🔧 出力形式：
+
+出力形式:
 - 入力と同じJSONL形式で出力すること
 - 各行に "title" と "rewrittenTitle" を含めること
 - "rewrittenTitle" にはリライト済みのタイトルを格納すること`;
@@ -76,10 +77,16 @@ export const handler: Handler = async (event: any) => {
                 if (!href) continue;
                 await scrapingContent(href, title, outputResults);
             }
-            await outPutS3(outputResults, "title");
+
+            // プロンプト作成
+            let inputData = MAIN_CONTENT_PROMPT + "\n";
+            inputData += outputResults.map((item: any) => {
+                return JSON.stringify(item);
+            }).join('\n');
+            await outPutS3(inputData, "title");
             break;
         case "updateRewriteTitle":
-            const titleData = await getObjetS3(`private/edit/title-${dayjs().format("YYYYMMDD")}.jsonl`) as string;
+            const titleData = await getObjetS3(`private/edit/title.jsonl`) as string;
             if (titleData) await updateRewriteTitle(titleData);
             break;
     }
@@ -358,23 +365,12 @@ async function createSlug(title: string) {
 
 
 // S3に格納する関数
-async function outPutS3(output: any, fileName: string) {
-    console.info("outPutS3 IN:", output, fileName);
-    let newData = "";
-    // if (listData.Contents) {
-    //     for (const v of listData.Contents) {
-    //         newCommentData += await processS3getObjet(v) + "\n";
-    //     }
-    // }
-    // JSON LINEとして保存する場合
-    newData += output.map((item: any) => {
-        return JSON.stringify(item);
-    }).join('\n');
-    // コメントデータをS3に格納
+async function outPutS3(inputData: any, fileName: string) {
+    console.info("outPutS3 IN:", inputData, fileName);
     const params = {
         Bucket: BUCKET_NAME_IS_01,
-        Key: `private/edit/${fileName}_prompt.txt`,
-        Body: newData,
+        Key: `private/edit/${fileName}_${dayjs().format("YYYYMMDD")}_prompt.txt`,
+        Body: inputData,
     };
     console.info("PutObject REQ", params);
     await s3.send(new PutObjectCommand(params));
