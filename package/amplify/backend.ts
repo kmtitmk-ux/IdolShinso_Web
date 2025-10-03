@@ -64,6 +64,7 @@ const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
     name: process.env.RULE_NAME_IS_01 ?? `processOrderStatusChange-${appId}-${branch}`,
     scheduleExpression: "cron(0 0 ? * * *)",
+    state: branch === "main" ? "ENABLED" : "DISABLED",
     targets: [
         {
             id: "ProcessOrderTarget",
