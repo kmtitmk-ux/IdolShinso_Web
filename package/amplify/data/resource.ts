@@ -8,48 +8,49 @@ and "delete" any "Todo" records.
 =========================================================================*/
 
 const IsPosts = {
-    createdAt: a.datetime().required(),
     rewrittenTitle: a.string(),
-    slug: a.string().required(),
+    content: a.string(),
     status: a.string().required(),
-    thumbnail: a.string(),
-    title: a.string().required()
-};
-const IsPostMeta = {
-    createdAt: a.datetime().required(),
-    postId: a.id(),
-    name: a.string().required(),
-    slug: a.string().required(),
-    taxonomy: a.string().required(),
-    slugTaxonomy: a.string().required()
 };
 const IsTerms = {
-    name: a.string().required(),
-    slug: a.string().required(),
-    taxonomy: a.string().required()
+    name: a.string().required()
 };
 const IsComments = {
     postId: a.id(),
     header: a.string(),
     content: a.string(),
-    createdAt: a.datetime().required()
+    createdAt: a.datetime().required(),
+    post: a.belongsTo('IsPosts', 'postId')
 };
 const schema = a.schema({
     IsPosts: a
         .model({
             ...IsPosts,
+            createdAt: a.datetime().required(),
+            slug: a.string().required(),
+            thumbnail: a.string(),
+            title: a.string().required(),
+            updatedAt: a.datetime().required(),
             comments: a.hasMany('IsComments', 'postId'),
-            postmeta: a.hasMany('IsPostMeta', 'postId')
+            commentsTranslations: a.hasMany('IsCommentsTranslations', 'postId'),
+            postmeta: a.hasMany('IsPostMeta', 'postId'),
+            postsTranslations: a.hasMany('IsPostsTranslations', 'postId')
         })
         .secondaryIndexes((index) => [
             index('title'),
             index('slug'),
-            index('status').sortKeys(['createdAt'])
+            index('status').sortKeys(['createdAt']),
+            index('status').sortKeys(['updatedAt'])
         ])
         .authorization((allow) => [allow.guest()]),
     IsPostMeta: a
         .model({
-            ...IsPostMeta,
+            createdAt: a.datetime().required(),
+            postId: a.id(),
+            name: a.string().required(),
+            slug: a.string().required(),
+            taxonomy: a.string().required(),
+            slugTaxonomy: a.string().required(),
             post: a.belongsTo('IsPosts', 'postId'),
         })
         .secondaryIndexes((index) => [
@@ -57,7 +58,12 @@ const schema = a.schema({
         ])
         .authorization((allow) => [allow.guest()]),
     IsTerms: a
-        .model({ ...IsTerms })
+        .model({
+            ...IsTerms,
+            slug: a.string().required(),
+            taxonomy: a.string().required(),
+            termsTranslations: a.hasMany('IsTermsTranslations', 'termId')
+        })
         .secondaryIndexes((index) => [
             index('slug'),
             index('taxonomy')
@@ -66,45 +72,37 @@ const schema = a.schema({
     IsComments: a
         .model({
             ...IsComments,
-            post: a.belongsTo('IsPosts', 'postId')
         })
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest()]),
-
-    IsPostsEn: a
+    IsPostsTranslations: a
         .model({
             ...IsPosts,
-            comments: a.hasMany('IsCommentsEn', 'postId'),
-            postmeta: a.hasMany('IsPostMetaEn', 'postId')
+            lang: a.string().required(),
+            postId: a.id(),
+            post: a.belongsTo('IsPosts', 'postId')
         })
         .secondaryIndexes((index) => [
-            index('title'),
-            index('slug'),
-            index('status').sortKeys(['createdAt'])
+            index('postId')
         ])
         .authorization((allow) => [allow.guest()]),
-    IsPostMetaEn: a
+    IsTermsTranslations: a
         .model({
-            ...IsPostMeta,
-            post: a.belongsTo('IsPostsEn', 'postId'),
+            ...IsTerms,
+            termId: a.id(),
+            lang: a.string().required(),
+            term: a.belongsTo('IsTerms', 'termId')
         })
         .secondaryIndexes((index) => [
-            index('slugTaxonomy').sortKeys(['createdAt'])
+            index('lang')
         ])
         .authorization((allow) => [allow.guest()]),
-    IsTermsEn: a
-        .model({ ...IsTerms })
-        .secondaryIndexes((index) => [
-            index('slug'),
-            index('taxonomy')
-        ])
-        .authorization((allow) => [allow.guest()]),
-    IsCommentsEn: a
+    IsCommentsTranslations: a
         .model({
             ...IsComments,
-            post: a.belongsTo('IsPostsEn', 'postId')
+            lang: a.string().required()
         })
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])

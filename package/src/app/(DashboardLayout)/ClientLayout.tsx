@@ -1,4 +1,5 @@
 "use client";
+import { usePathname } from "next/navigation";
 import { Container, Box } from "@mui/material";
 import React, { useState } from "react";
 import { AppRouterCacheProvider } from "@mui/material-nextjs/v14-appRouter";
@@ -8,9 +9,12 @@ import { Amplify } from 'aws-amplify';
 import outputs from '@/amplify_outputs.json';
 Amplify.configure(outputs);
 
+type LangCode = "ja" | "en" | "zh-TW";
 export default function ClientLayout({ children }: { children: React.ReactNode; }) {
     const [isSidebarOpen, setSidebarOpen] = useState(true);
     const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+    const pathLang = usePathname().split("/")[1] as LangCode;
+    const lang: LangCode = ["ja", "en", "zh-TW"].includes(pathLang) ? pathLang : "ja";
     return (
         <>
             <AppRouterCacheProvider>
@@ -26,6 +30,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode; 
                         isSidebarOpen={isSidebarOpen}
                         isMobileSidebarOpen={isMobileSidebarOpen}
                         onSidebarClose={() => setMobileSidebarOpen(false)}
+                        lang={lang}
                     />
                     {/* ------------------------------------------- */}
                     {/* Main Wrapper */}
@@ -43,7 +48,10 @@ export default function ClientLayout({ children }: { children: React.ReactNode; 
                         {/* ------------------------------------------- */}
                         {/* Header */}
                         {/* ------------------------------------------- */}
-                        <Header toggleMobileSidebar={() => setMobileSidebarOpen(true)} />
+                        <Header
+                            toggleMobileSidebar={() => setMobileSidebarOpen(true)}
+                            lang={lang}
+                        />
                         {/* ------------------------------------------- */}
                         {/* PageContent */}
                         {/* ------------------------------------------- */}

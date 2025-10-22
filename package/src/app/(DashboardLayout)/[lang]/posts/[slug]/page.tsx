@@ -12,13 +12,16 @@ const DOMPurify = createDOMPurify(window);
 const bucketName01 = outputs?.storage?.bucket_name ?? ""; // package/amplify_outputs.json
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+    params: Promise<{
+        slug: string;
+        lang: string;
+    }>;
 }
 export async function generateMetadata({ params }: PageProps) {
-    const { slug } = await params;
-    const slugTaxonomy = `${slug}`;
+    const awaitedParams = await params;
+    const { lang, slug } = awaitedParams;
     const { data } = await cookiesClient.models.IsPosts.listIsPostsBySlug({
-        slug,
+        slug: decodeURIComponent(slug)
     }, {
         selectionSet: [
             "title",
@@ -33,10 +36,10 @@ export async function generateMetadata({ params }: PageProps) {
     };
 }
 const SamplePage = async ({ params }: PageProps) => {
-    const { slug } = await params;
-    console.info("slug", slug);
+    const awaitedParams = await params;
+    const { lang, slug } = awaitedParams;
     const { data: postData } = await cookiesClient.models.IsPosts.listIsPostsBySlug(
-        { slug },
+        { slug: decodeURIComponent(slug) },
         {
             selectionSet: [
                 "id",
@@ -44,11 +47,15 @@ const SamplePage = async ({ params }: PageProps) => {
                 "title",
                 "rewrittenTitle",
                 "thumbnail",
+                "content",
                 "createdAt",
                 "postmeta.id",
-                "postmeta.name"
+                "postmeta.name",
+                "postsTranslations.lang",
+                "postsTranslations.rewrittenTitle"
             ]
         });
+    const postsTranslations = postData[0].postsTranslations.filter((pm) => pm.lang === lang)[0];
     const postId = postData[0]?.id as string;
     const { data: commentsData } = await cookiesClient.models.IsComments.listIsCommentsByPostIdAndCreatedAt(
         { postId },
@@ -63,14 +70,14 @@ const SamplePage = async ({ params }: PageProps) => {
     const data = { ...postData[0], comments: commentsData ?? [] };
     console.info("fetch data postData:", postData);
     console.info("fetch data commentsData:", commentsData);
-    const title = data.rewrittenTitle || data.title || "";
+    const title = postsTranslations?.rewrittenTitle || data.rewrittenTitle || "";
     return (
         <PageContainer
             title={title}
             description="this is Sample page"
         >
             <DashboardCard title={title}>
-                <Image
+                {/* <Image
                     src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data.thumbnail as string}`}
                     alt={title}
                     width={400}
@@ -81,6 +88,11 @@ const SamplePage = async ({ params }: PageProps) => {
                         objectFit: 'cover'
                     }
                     }
+                /> */}
+                <div
+                    dangerouslySetInnerHTML={{
+                        __html: DOMPurify.sanitize(data.content ?? "")
+                    }}
                 />
                 < Grid container spacing={3} mt={2} >
                     {

@@ -35,7 +35,8 @@ type SidebarMenuItem = {
     icon?: React.ElementType;
     href?: string;
 };
-const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any) => {
+type LangCode = "ja" | "en" | "zh-TW";
+const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any, lang: LangCode) => {
     return items.map((item: any) => {
         const Icon = item.icon ? item.icon : IconPoint;
         const itemIcon = <Icon stroke={1.5} size="1.3rem" />;
@@ -57,7 +58,7 @@ const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any) => {
                     icon={itemIcon}
                     borderRadius='7px'
                 >
-                    {renderMenuItems(item.children, pathDirect)}
+                    {renderMenuItems(item.children, pathDirect, lang)}
                 </Submenu>
             );
         }
@@ -69,7 +70,7 @@ const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any) => {
                     isSelected={pathDirect === item?.href}
                     borderRadius='8px'
                     icon={itemIcon}
-                    link={item.href}
+                    link={`/${lang}/${item.href}`}
                     component={Link}
                 >
                     {item.title}
@@ -79,7 +80,7 @@ const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any) => {
     });
 };
 
-const SidebarItems = () => {
+const SidebarItems = ({ lang }: { lang: LangCode; }) => {
     const pathname = usePathname();
     const pathDirect = pathname;
     const [menuitems, setMenuitems] = useState<SidebarMenuItem[]>([
@@ -103,7 +104,7 @@ const SidebarItems = () => {
                 // nextToken: nextToken || undefined,
                 taxonomy: "category"
             });
-            console.info("fetched sidebar:", data);
+            // console.info("fetched sidebar:", data);
             if (errors) {
                 console.error(errors);
                 return;
@@ -124,10 +125,11 @@ const SidebarItems = () => {
         fetchData();
     }, []);
 
+    console.log("lang", lang);
     return (
         <>
             <MUI_Sidebar width={"100%"} showProfile={false} themeColor={"#5D87FF"} themeSecondaryColor={'#49beff'} >
-                <Box sx={{ display: 'flex', alignItems: 'center', px: 2, py: 2 }}>
+                <Box component={Link} href={`/`} sx={{ display: 'flex', alignItems: 'center', px: 2, py: 2 }}>
                     <Image
                         src="/images/logos/logo.svg"
                         alt="logo"
@@ -136,7 +138,7 @@ const SidebarItems = () => {
                         priority
                     />
                 </Box>
-                {renderMenuItems(menuitems, pathDirect)}
+                {renderMenuItems(menuitems, pathDirect, lang)}
                 {/* <Box px={2}>
                     <Upgrade />
                 </Box> */}

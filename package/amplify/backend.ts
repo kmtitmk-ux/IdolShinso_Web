@@ -31,15 +31,7 @@ const eventBus = aws_events.EventBus.fromEventBusName(
     "default"
 );
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
-
 const lambdaFunction = backend.myFirstFunction.resources.cfnResources.cfnFunction;
-const policyStatement = new PolicyStatement({
-    effect: Effect.ALLOW,
-    actions: ["lambda:InvokeFunction"],
-    resources: [lambdaFunction.attrArn],
-});
-// Lambda 関数の ARN を取得
-
 // IAM ロールを作成（EventBridge が Lambda を呼び出す権限）
 const eventBusRole = new Role(eventStack, "EventBridgeInvokeLambdaRole", {
     assumedBy: new ServicePrincipal("events.amazonaws.com"),
@@ -60,7 +52,7 @@ const appId = process.env.AWS_APP_ID || "dtb1zhx1jvcon";
 type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 // EventBridge ルールを作成
-const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
+new aws_events.CfnRule(eventStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
     name: process.env.RULE_NAME_IS_01 ?? `processOrderStatusChange-${appId}-${branch}`,
     scheduleExpression: "cron(0 0 ? * * *)",
@@ -71,6 +63,12 @@ const rule = new aws_events.CfnRule(eventStack, "OrderStatusRule", {
             arn: lambdaFunction.attrArn,
             roleArn: eventBusRole.roleArn,
             input: JSON.stringify({ procType: "scrapingContent" })
+        },
+        {
+            id: "IsCreateSitemap",
+            arn: lambdaFunction.attrArn,
+            roleArn: eventBusRole.roleArn,
+            input: JSON.stringify({ procType: "createSitemap" })
         },
     ],
 });
@@ -111,4 +109,10 @@ functionRole?.addToPrincipalPolicy(
         ],
     })
 );
-
+functionRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['translate:TranslateText'],
+        resources: ['*']
+    })
+);

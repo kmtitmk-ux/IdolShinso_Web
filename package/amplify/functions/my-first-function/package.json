@@ -11,12 +11,18 @@
   "dependencies": {
     "@aws-sdk/client-bedrock-runtime": "^3.864.0",
     "@aws-sdk/client-dynamodb": "^3.858.0",
+    "@aws-sdk/client-translate": "^3.901.0",
     "@aws-sdk/lib-dynamodb": "^3.858.0",
     "axios": "^1.11.0",
     "cheerio": "^1.1.0",
-    "dayjs": "^1.11.13"
+    "dayjs": "^1.11.13",
+    "js-yaml": "^4.1.0",
+    "xmlbuilder2": "^3.1.1"
   },
   "devDependencies": {
-    "@types/cheerio": "^0.22.35"
+    "@types/cheerio": "^0.22.35",
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^24.7.2",
+    "typescript": "^5.9.3"
   }
 }

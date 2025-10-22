@@ -34,10 +34,13 @@ import { generateClient } from 'aws-amplify/data';
 import type { Schema } from '@/amplify/data/resource';
 
 interface PageProps {
-  params: Promise<{ slug: string }>;
+    params: Promise<{
+        slug: string;
+        lang: string;
+    }>;
 }
 export async function generateMetadata({ params }: PageProps) {
-    const { slug } = await params;
+    const { slug, lang } = await params;
     const slugTaxonomy = `${slug}_category`;
     const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
         slugTaxonomy,
@@ -53,12 +56,13 @@ export async function generateMetadata({ params }: PageProps) {
     };
 }
 const Category = async ({ params }: PageProps) => {
-    const { slug } = await params;
+    const { slug, lang } = await params;
     console.info("slug", decodeURIComponent(slug));
     const slugTaxonomy = `${decodeURIComponent(slug)}_category`;
     const { data, nextToken } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
         slugTaxonomy,
     }, {
+        limit: 8,
         selectionSet: [
             "post.id",
             "post.slug",
@@ -71,28 +75,40 @@ const Category = async ({ params }: PageProps) => {
             "name"
         ]
     });
-    const editData = data.map((item) => {
-        const outParam = {
-            ...item.post,
+    // 翻訳データ取得
+    const editData: any = [];
+    for (const v of data) {
+        const post = {
+            ...v.post,
             postmeta: [{
-                id: item.id,
-                slug: item.slug,
-                name: item.name
+                id: v.id,
+                slug: v.slug,
+                name: v.name
             }]
         };
-        return outParam;
-    }).filter(item => item.id);
-    console.info("fetch data category:", editData);
+        const { data } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
+            postId: v.post.id
+        }, {
+            filter: { lang: { eq: lang } },
+            selectionSet: ["rewrittenTitle"]
+        });
+        post.rewrittenTitle = data[0]?.rewrittenTitle ?? v.post.title;
+        editData.push({ ...post });
+    }
     return (
         <>
-            <PageContainer title={data[0].name ?? ""} description="">
+            <PageContainer title={data[0]?.name ?? ""} description="">
                 <Box>
                     <Grid container spacing={3}>
-                        <Blog data={editData} />
+                        <Blog
+                            data={editData}
+                            lang={lang}
+                        />
                         <NextPage
                             token={nextToken ?? ""}
                             queryType={"category"}
                             pk={slugTaxonomy}
+                            lang={lang}
                         />
                     </Grid>
                 </Box>

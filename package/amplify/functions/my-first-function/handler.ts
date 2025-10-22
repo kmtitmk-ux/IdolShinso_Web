@@ -16,6 +16,7 @@ import {
     NoSuchKey,
     S3ServiceException
 } from "@aws-sdk/client-s3";
+import { TranslateClient, TranslateTextCommand } from '@aws-sdk/client-translate';
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import { v4 as uuidv4 } from 'uuid';
@@ -23,20 +24,28 @@ import { Schema } from '../../data/resource';
 import dayjs from "dayjs";
 import customParseFormat from "dayjs/plugin/customParseFormat";
 import wanakana from "wanakana";
+import yaml from 'js-yaml';
+import { create } from 'xmlbuilder2';
 import type { Handler } from 'aws-lambda';
 
 dayjs.extend(customParseFormat);
 
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-const s3 = new S3Client({});
+const s3Client = new S3Client({});
+const translateClient = new TranslateClient({});
+
 const BUCKET_NAME_IS_01 = process.env.BUCKET_NAME_IS_01 as string;
-const TABLE_NAME_IS_POSTS = process.env.TABLE_NAME_IS_POSTS as string;
-const TABLE_NAME_IS_POSTMETA = process.env.TABLE_NAME_IS_POSTMETA as string;
-const TABLE_NAME_IS_TERMS = process.env.TABLE_NAME_IS_TERMS as string;
-const TABLE_NAME_IS_COMMENTS = process.env.TABLE_NAME_IS_COMMENTS as string;
+const TABLE_ID = process.env.TABLE_ID as string;
+const TABLE_NAME_IS_POSTS = `IsPosts-${TABLE_ID}`;
+const TABLE_NAME_IS_POSTMETA = `IsPostMeta-${TABLE_ID}`;
+const TABLE_NAME_IS_TERMS = `IsTerms-${TABLE_ID}`;
+const TABLE_NAME_IS_COMMENTS = `IsComments-${TABLE_ID}`;
+const TABLE_NAME_IS_POSTS_TRANSLATIONS = `IsPostsTranslations-${TABLE_ID}`;
+const TABLE_NAME_IS_COMMENTS_TRANSLATIONS = `IsCommentsTranslations-${TABLE_ID}`;
+
 const MAX_BATCH_SIZE = 25;
-const MAIN_CONTENT_PROMPT = `
-以下のJSONL形式のデータには、各行に "title" キーを持つブログタイトルが含まれています。
+
+const TITLE_PROMPT = `以下のJSONL形式のデータには、各行に "title" キーを持つブログタイトルが含まれています。
 それぞれの "title" を、SEO対策とCTA（行動喚起）を意識して魅力的にリライトしてください。
 リライトしたタイトルは "rewrittenTitle" キーに格納してください。
 
@@ -50,7 +59,38 @@ const MAIN_CONTENT_PROMPT = `
 出力形式:
 - 入力と同じJSONL形式で出力すること
 - 各行に "title" と "rewrittenTitle" を含めること
-- "rewrittenTitle" にはリライト済みのタイトルを格納すること`;
+- "rewrittenTitle" にはリライト済みのタイトルを格納すること
+`;
+
+const MAIN_CONTENT_PROMPT = `以下に与える「タイトル」「カテゴリー」「タグ」「コメント」をもとに、ブログ記事を作成してください。
+
+タイトル: {title}
+
+カテゴリー: {category}
+
+タグ:
+{tags}
+
+コメント:
+{comments}
+
+ID:
+{id}
+
+要件:
+- 文字数：日本語で**1500〜2200文字**。この範囲を目安に、だいたい2000文字程度に整えてください。
+- 構成：導入（リード）、本文（h2/h3相当の見出しを複数使用）含める。
+- トーン：読者にとってわかりやすく、親しみやすい口調（フレンドリーかつ信頼感のある文体）。
+- 見た目：適度に<h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>等を使うこと。
+- SEO：与えられたカテゴリー、タグを自然に本文へ散りばめる。不自然なキーワード詰め込みは禁止。
+- 出力形式：純粋なHTML断片。CSSや外部スクリプトは含めない。
+- 記事内のheader, footerは不要、純粋な記事のみのとする。
+
+出力形式:
+- ID : [ID]
+- HTML: [記事のHTMLをここに記載する]
+
+`;
 // type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
 // type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
 // type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
@@ -59,6 +99,13 @@ type OutputResult = {
     id: string;
     title: string;
     rewrittenTitle: string;
+};
+type MainContPromptParts = {
+    id: string;
+    title: string;
+    category: string;
+    tags: string[];
+    comments: string[];
 };
 export const handler: Handler = async (event: any) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
@@ -79,7 +126,7 @@ export const handler: Handler = async (event: any) => {
             }
 
             // プロンプト作成
-            let inputData = MAIN_CONTENT_PROMPT + "\n";
+            let inputData = TITLE_PROMPT + "\n";
             inputData += outputResults.map((item: any) => {
                 return JSON.stringify(item);
             }).join('\n');
@@ -89,6 +136,49 @@ export const handler: Handler = async (event: any) => {
             const titleData = await getObjetS3(`private/edit/title.jsonl`) as string;
             if (titleData) await updateRewriteTitle(titleData);
             break;
+        case "updateMainContent":
+            const articlesTxt = await getObjetS3(`private/edit/main_articles.yml`) as string;
+            type ArticlesList = { articles: Record<string, string>[]; };
+            const { articles } = yaml.load(articlesTxt) as ArticlesList;
+            console.info("yaml data", articles);
+            for (const article of articles) {
+                const param: UpdateCommandInput = {
+                    TableName: TABLE_NAME_IS_POSTS,
+                    Key: { id: article.id },
+                    UpdateExpression: "SET #content = :content",
+                    ExpressionAttributeNames: { "#content": "content" },
+                    ExpressionAttributeValues: { ":content": article.html },
+                    ConditionExpression: "attribute_exists(id)",
+                    ReturnValues: "UPDATED_NEW"
+                };
+                console.info("Update param", JSON.stringify(param));
+                await docClient.send(new UpdateCommand(param));
+            }
+            break;
+        case "createSitemap":
+            const psotItem = await queryToDynamo(
+                TABLE_NAME_IS_POSTS,
+                "isPostsByStatusAndUpdatedAt",
+                "#status = :status",
+                { "#status": "status" },
+                { ":status": "published" }
+            );
+            const posts: { slug: string; lastModified: string; }[] = [];
+            for (const item of psotItem) {
+                posts.push({
+                    slug: item.slug,
+                    lastModified: item.updatedAt
+                });
+            }
+            const baseURL = process.env.BLOG_BASE_URL || 'https://geinouwasa.com';
+            const xmlContent = await generateSitemapXml(posts, baseURL);
+            const params = {
+                Bucket: BUCKET_NAME_IS_01,
+                Key: "public/sitemap.xml",
+                Body: xmlContent,
+            };
+            await s3Client.send(new PutObjectCommand(params));
+            break;
     }
     return {
         statusCode: 200,
@@ -96,15 +186,60 @@ export const handler: Handler = async (event: any) => {
     };
 };
 
+async function generateSitemapXml(posts: { slug: string; lastModified: string; }[], baseURL: string) {
+    // XMLドキュメントの作成とルート要素の設定
+    const root = create({ version: '1.0', encoding: 'UTF-8' })
+        .ele('urlset', { xmlns: 'http://www.sitemaps.org/schemas/sitemap/0.9' });
+    root.ele('url')
+        .ele('loc').txt(baseURL).up()
+        .ele('lastmod').txt(new Date().toISOString()).up()
+        .up();
+    posts.forEach(post => {
+        const postUrl = `${baseURL}/posts/${post.slug}`;
+        const lastmodIso = new Date(post.lastModified).toISOString(); // 日付オブジェクトに変換してからISO形式を確実にする
+        root.ele('url')
+            .ele('loc').txt(postUrl).up()
+            .ele('lastmod').txt(lastmodIso).up()
+            .up();
+    });
+    return root.end({ prettyPrint: true });
+}
+
+
+async function test(text: string, sourceLanguageCode: string, targetLanguageCode: string) {
+    const translateCommand = new TranslateTextCommand({
+        Text: text,
+        SourceLanguageCode: sourceLanguageCode,
+        TargetLanguageCode: targetLanguageCode,
+    });
+    const translateResponse = await translateClient.send(translateCommand);
+    console.log("Translation:", JSON.stringify(translateResponse, null, "\t"));
+    return translateResponse;
+}
+
 
 async function scrapingContent(link: string, title: string, outputResults: OutputResult[]) {
-    const psotItem = await queryToDynamo(TABLE_NAME_IS_POSTS, "isPostsByTitle", "title = :title", { ":title": title });
+    const mainContPromptParts: MainContPromptParts = {
+        id: "",
+        title,
+        category: "",
+        tags: [],
+        comments: []
+    };
+    const psotItem = await queryToDynamo(
+        TABLE_NAME_IS_POSTS,
+        "isPostsByTitle",
+        "#title = :title",
+        { "#title": "title" },
+        { ":title": title }
+    );
     if (psotItem.length) return;
 
     console.info("axios", link);
     const res = await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
     await new Promise(res => setTimeout(res, 1000));
     const postId = uuidv4();
+    mainContPromptParts.id = postId;
     const createdAt = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
     const $ = cheerio.load(res.data);
 
@@ -115,7 +250,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
 
     // スラッグ作成
     let slug = await createSlug(title);
-    slug = await checkSlugWithRetry(slug, TABLE_NAME_IS_POSTS, "isPostsBySlug", "slug = :slug");
+    slug = await checkSlugWithRetry(slug, TABLE_NAME_IS_POSTS, "isPostsBySlug", "#slug = :slug");
 
     // 投稿の登録（タイトルの重複チェック） 
     if (!psotItem.length) {
@@ -166,7 +301,13 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                 await docClient.send(new PutCommand(param));
 
                 // タームの登録（存在しない場合のみ）
-                const termItem = await queryToDynamo(TABLE_NAME_IS_TERMS, "isTermsBySlug", "slug = :slug", { ":slug": slug });
+                const termItem = await queryToDynamo(
+                    TABLE_NAME_IS_TERMS,
+                    "isTermsBySlug",
+                    "#slug = :slug",
+                    { "#slug": "slug" },
+                    { ":slug": slug }
+                );
                 if (!termItem.length) {
                     const param: PutCommandInput = {
                         TableName: TABLE_NAME_IS_TERMS,
@@ -183,6 +324,9 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                     console.info("PutCommand parma", param);
                     await docClient.send(new PutCommand(param));
                 }
+
+                // メインコンテンツのプロンプトパーツに追加
+                taxonomy === "category" ? mainContPromptParts.category = name : mainContPromptParts.tags.push(name);
             }
         }
     });
@@ -192,6 +336,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
     const ths = $('#mainEntity .entry-title + div div.meta');
     const tds = $('#mainEntity .entry-title + div .message');
     const pushItems: IS_COMMENTS_INPUT[] = [];
+    const pushItemsTranslation = [];
     for (const [i, el] of Array.from(tds).entries()) {
         let ogImageRes = { Key: "", id: "" };
         const commentDateText = $(ths[i]).text()?.trim().match(/\d{4}\/\d{2}\/\d{2}(?:\(.{1}\))? \d{2}:\d{2}:\d{2}\.\d{2}/) ?? [];
@@ -211,6 +356,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
             header = `${Array.from(tds).length - i} : ${dayjs().format("YYYY/MM/DD(dd) HH:mm:ss.SS")}`;
         }
         let content = $(el).html()?.trim();
+        const promptContent = $(el).text()?.trim().replace(/\r?\n/g, '');
         if (content?.includes("<img")) {
             // 画像が含まれている場合は、画像をS3に保存
             const imgSrc = $(el).find('img').attr('src') as string;
@@ -229,11 +375,30 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IsComments"
             } as IS_COMMENTS_INPUT);
+            for (const lang of ["en", "zh-TW"]) {
+                const { TranslatedText } = await test(content as string, 'ja', lang);
+                pushItemsTranslation.push({
+                    id: uuidv4(),
+                    postId,
+                    content: TranslatedText,
+                    header,
+                    lang,
+                    createdAt,
+                    updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                    __typename: "IsCommentsTranslations"
+                });
+            }
+
+            // メインコンテンツのプロンプトパーツに追加
+            mainContPromptParts.comments.push(promptContent as string);
         }
     }
 
     // コメントの一括登録
     await batchWriteItems(pushItems);
+
+    // メインコンテンツのプロンプト作成
+    await createdMainContentPrompt(mainContPromptParts);
 
     // 返却
     outputResults.push({
@@ -242,6 +407,21 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
         rewrittenTitle: ""
     });
 };
+
+
+// メインコンテンツのプロンプト作成
+async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts) {
+    const { id, title, category, tags, comments } = mainContPromptParts;
+    console.info("createdMainContentPrompt IN:", JSON.stringify(mainContPromptParts));
+    if (!title || !category || !tags.length || !comments.length) return;
+    let inputData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)
+        .replace("{id}", id)
+        .replace("{category}", category)
+        .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
+        .replace("{comments}", `${comments.map(item => `- ${item}`).join("\n")}`);
+    await outPutS3(inputData, `mainContent_${mainContPromptParts.id}`);
+}
+
 
 // コメントをバッチ登録する関数
 async function batchWriteItems(items: IS_COMMENTS_INPUT[]) {
@@ -281,6 +461,7 @@ async function queryToDynamo(
     TableName: string,
     IndexName: string,
     KeyConditionExpression: string,
+    ExpressionAttributeNames: Record<string, any>,
     ExpressionAttributeValues: Record<string, any>
 ) {
     const outParam = [];
@@ -288,8 +469,8 @@ async function queryToDynamo(
         TableName,
         IndexName,
         KeyConditionExpression,
-        ExpressionAttributeValues,
-        Limit: 1
+        ExpressionAttributeNames,
+        ExpressionAttributeValues
     };
     do {
         console.info("QueryCommand param", param);
@@ -311,7 +492,13 @@ async function checkSlugWithRetry(
     const baseSlug = slug;
     let counter = 0;
     while (true) {
-        const result = await queryToDynamo(tableName, indexName, keyConditionExpression, { ":slug": slug });
+        const result = await queryToDynamo(
+            tableName,
+            indexName,
+            keyConditionExpression,
+            { "#slug": "slug" },
+            { ":slug": slug }
+        );
         if (result.length === 0) break;
         counter++;
         slug = `${baseSlug}-${counter}`;
@@ -343,7 +530,7 @@ async function getImage(ogImage: string, date: string) {
         Body: Buffer.from(res.data),
     };
     console.info("PutObject REQ", putObjParam);
-    const putResult = await s3.send(new PutObjectCommand(putObjParam));
+    const putResult = await s3Client.send(new PutObjectCommand(putObjParam));
     console.info("PutObject RES", putResult);
     return { Key, id };
 }
@@ -369,18 +556,18 @@ async function outPutS3(inputData: any, fileName: string) {
     console.info("outPutS3 IN:", inputData, fileName);
     const params = {
         Bucket: BUCKET_NAME_IS_01,
-        Key: `private/edit/${fileName}_${dayjs().format("YYYYMMDD")}_prompt.txt`,
+        Key: `private/edit/${fileName}_${dayjs().format("YYYYMMDDHHmmssSSS")}_prompt.txt`,
         Body: inputData,
     };
     console.info("PutObject REQ", params);
-    await s3.send(new PutObjectCommand(params));
+    await s3Client.send(new PutObjectCommand(params));
 }
 
 
 // S3からデータを取得する
 async function getObjetS3(Key: string) {
     try {
-        const response = await s3.send(
+        const response = await s3Client.send(
             new GetObjectCommand({
                 Bucket: BUCKET_NAME_IS_01,
                 Key,
@@ -426,5 +613,24 @@ async function updateRewriteTitle(titleData: string) {
         };
         console.info("Update param", JSON.stringify(param));
         await docClient.send(new UpdateCommand(param));
+
+        // 各言語に翻訳して保存
+        for (const lang of ["en", "zh-TW"]) {
+            const { TranslatedText } = await test(v.rewrittenTitle, 'ja', lang);
+            const param: PutCommandInput = {
+                TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                Item: {
+                    id: uuidv4(),
+                    postId: v.id,
+                    lang,
+                    rewrittenTitle: TranslatedText,
+                    createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                    updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                    __typename: "IsPostsTranslations"
+                }
+            };
+            console.info("PutCommand param", param);
+            await docClient.send(new PutCommand(param));
+        }
     }
 }

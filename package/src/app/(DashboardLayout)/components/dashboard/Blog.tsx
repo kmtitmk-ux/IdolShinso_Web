@@ -22,24 +22,33 @@ import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
 const bucketName01 = outputs?.storage?.bucket_name; // package/amplify_outputs.json
 
-const Blog = ({ data }: { data: any; }) => {
+const Blog = ({
+    data,
+    lang
+}: {
+    data: any[];
+    lang: string;
+}) => {
+    console.log("Blog data", data);
     return (
         <>
-            {data?.map((product: any, index: number) => {
+            {data.map((product: any, index: number) => {
                 const postmeta = product?.postmeta[0] ?? [];
+                const postLink = lang === "ja" ? `/posts/${product.slug}` : `/${lang}/posts/${product.slug}`;
+                const termLink = lang === "ja" ? `/category/${postmeta.slug}` : `/${lang}/category/${postmeta.slug}`;
                 return (
                     <Grid key={index} size={{ xs: 12, md: 4, lg: 3 }}>
                         <BlankCard>
                             {/* <Typography>
-                            <Avatar
-                                src={product.photo} variant="square"
-                                sx={{
-                                    height: 250,
-                                    width: '100%',
-                                }}
-                            />
-                        </Typography> */}
-                            <Link href={`/posts/${product.slug ?? ""}`}>
+                                <Avatar
+                                    src={product.photo} variant="square"
+                                    sx={{
+                                        height: 250,
+                                        width: '100%',
+                                    }}
+                                />
+                            </Typography> */}
+                            <Link href={postLink}>
                                 <div style={{ width: '100%', height: 150, position: 'relative' }}>
                                     <Image
                                         src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail as string}`}
@@ -50,16 +59,16 @@ const Blog = ({ data }: { data: any; }) => {
                                 </div>
                             </Link>
                             {/* <Tooltip title="Add To Cart">
-                            <Fab
-                                size="small"
-                                color="primary"
-                                sx={{ bottom: "75px", right: "15px", position: "absolute" }}
-                            >
-                                <IconBasket size="16" />
-                            </Fab>
-                        </Tooltip> */}
+                                <Fab
+                                    size="small"
+                                    color="primary"
+                                    sx={{ bottom: "75px", right: "15px", position: "absolute" }}
+                                >
+                                    <IconBasket size="16" />
+                                </Fab>
+                            </Tooltip> */}
                             <CardContent sx={{ p: 3, pt: 2 }}>
-                                <Typography component={Link} href={`/posts/${product?.slug ?? ""}`} variant="h6">
+                                <Typography component={Link} href={postLink} variant="h6">
                                     {product?.rewrittenTitle || product?.title}
                                 </Typography>
                                 <Stack
@@ -71,22 +80,22 @@ const Blog = ({ data }: { data: any; }) => {
                                     <Stack direction="row" alignItems="center">
                                         <Typography>{dayjs(product?.createdAt ?? "").format("YYYY/M/D")}</Typography>
                                         {/* <Typography
-                                        color="textSecondary"
-                                        ml={1}
-                                        sx={{ textDecoration: "line-through" }}
-                                    >
-                                        {product.createdAt}
-                                    </Typography> */}
+                                            color="textSecondary"
+                                            ml={1}
+                                            sx={{ textDecoration: "line-through" }}
+                                        >
+                                            {product.createdAt}
+                                        </Typography> */}
                                     </Stack>
-                                    <Button component={Link} href={`/category/${postmeta?.slug ?? ""}`} size="small">
+                                    <Button component={Link} href={termLink} size="small">
                                         {postmeta?.name ?? ""}
                                     </Button>
                                     {/* <Rating
-                                    name="read-only"
-                                    size="small"
-                                    value={product.rating}
-                                    readOnly
-                                /> */}
+                                        name="read-only"
+                                        size="small"
+                                        value={product.rating}
+                                        readOnly
+                                    /> */}
                                 </Stack>
                             </CardContent>
                         </BlankCard>

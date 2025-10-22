@@ -12,8 +12,18 @@ import {
 import { generateClient } from 'aws-amplify/data';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import type { Schema } from '@/amplify/data/resource';
-const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | null; queryType: string; pk: string; }) => {
-    console.info("NextPage", queryType, pk);
+const NextPage = ({
+    token = null,
+    queryType = "",
+    pk = "",
+    lang = ""
+}: {
+    token: string | null;
+    queryType: string;
+    pk: string;
+    lang: string;
+}) => {
+    console.info("NextPage", queryType, pk, lang);
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [nextToken, setNextToken] = useState<string | null>(token);
@@ -47,6 +57,7 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
         try {
             switch (queryType) {
                 case "category":
+                    console.log(pk);
                     res = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
                         slugTaxonomy: pk
                     }, {
@@ -66,17 +77,30 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                             "name"
                         ]
                     });
-                    res.data = res?.data ?? [].map((item: any) => {
-                        const outParam = {
-                            ...item.post,
+                    console.log("category editData", pk, res);
+
+                    // 翻訳データ取得
+                    const editData: any = [];
+                    for (const v of res.data ?? []) {
+                        const post = {
+                            ...v.post,
                             postmeta: [{
-                                id: item.id,
-                                slug: item.slug,
-                                name: item.name
+                                id: v.id,
+                                slug: v.slug,
+                                name: v.name
                             }]
                         };
-                        return outParam;
-                    }).filter((item: any) => item.status === "published");
+                        const { data } = await client.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
+                            postId: v.post.id
+                        }, {
+                            filter: { lang: { eq: lang } },
+                            selectionSet: ["rewrittenTitle"]
+                        });
+                        post.rewrittenTitle = data[0]?.rewrittenTitle ?? v.post.title;
+                        editData.push({ ...post });
+                    }
+                    setItems((prev) => [...prev, ...editData]);
+                    setNextToken(res?.nextToken ?? null);
                     break;
                 default:
                     res = await client.models.IsPosts.listIsPostsByStatusAndCreatedAt({
@@ -95,15 +119,24 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                             "postmeta.id",
                             "postmeta.slug",
                             "postmeta.name",
-                            "postmeta.taxonomy"
+                            "postmeta.taxonomy",
+                            "postsTranslations.lang",
+                            "postsTranslations.rewrittenTitle"
                         ],
                     });
                     res.data = (res.data ?? []).map((item: any) => {
+                        const postsTranslations = (item?.postsTranslations ?? []).filter((pm: any) => {
+                            if (lang !== "ja") {
+                                return pm.lang === lang;
+                            } else {
+                                return false;
+                            }
+                        })[0];
                         return {
                             id: item.id,
                             slug: item.slug,
                             title: item.title,
-                            rewrittenTitle: item.rewrittenTitle,
+                            rewrittenTitle: postsTranslations?.rewrittenTitle ?? item?.rewrittenTitle,
                             thumbnail: item.thumbnail,
                             createdAt: item.createdAt,
                             postmeta: item.postmeta.filter((pm: any) => {
@@ -112,7 +145,6 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                         };
                     });
             }
-            console.log("fetch NextPage", res?.data);
             setItems((prev) => [...prev, ...(res?.data ?? [])]);
             setNextToken(res?.nextToken ?? null);
         } catch (err) {
@@ -129,7 +161,7 @@ const NextPage = ({ token = null, queryType = "", pk = "" }: { token: string | n
                     <CircularProgress />
                 </Grid>
             )}
-            <Blog data={items} />
+            <Blog data={items} lang={lang} />
             <div ref={loader} style={{ height: "40px" }} />
         </>
     );

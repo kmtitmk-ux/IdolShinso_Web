@@ -1,15 +1,18 @@
 import { useMediaQuery, Box, Drawer } from "@mui/material";
 import SidebarItems from "./SidebarItems";
 
+type LangCode = "ja" | "en" | "zh-TW";
 interface ItemType {
     isMobileSidebarOpen: boolean;
     onSidebarClose: (event: React.MouseEvent<HTMLElement>) => void;
     isSidebarOpen: boolean;
+    lang: LangCode;
 }
 const MSidebar = ({
     isMobileSidebarOpen = false,
     onSidebarClose = () => { },
     isSidebarOpen = true,
+    lang
 }: ItemType) => {
     const lgUp = useMediaQuery((theme: any) => theme.breakpoints?.up("lg"));
     const sidebarWidth = "270px";
@@ -58,7 +61,7 @@ const MSidebar = ({
                             {/* ------------------------------------------- */}
                             {/* Sidebar Items */}
                             {/* ------------------------------------------- */}
-                            <SidebarItems />
+                            <SidebarItems lang={lang} />
                         </Box>
                     </Box>
                 </Drawer>
@@ -88,7 +91,7 @@ const MSidebar = ({
                 {/* ------------------------------------------- */}
                 {/* Sidebar Items */}
                 {/* ------------------------------------------- */}
-                <SidebarItems />
+                <SidebarItems lang={lang} />
             </Box>
             {/* ------------------------------------------- */}
             {/* Sidebar For Mobile */}
