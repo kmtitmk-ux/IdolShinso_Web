@@ -95,6 +95,7 @@ ID:
 // type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
 // type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
 type IS_COMMENTS_INPUT = Pick<Schema['IsComments']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsComments'; };
+type IS_COMMENTS_TRANSLATIONS_INPUT = Pick<Schema['IsCommentsTranslations']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsCommentsTranslations'; };
 type OutputResult = {
     id: string;
     title: string;
@@ -375,28 +376,28 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IsComments"
             } as IS_COMMENTS_INPUT);
-            for (const lang of ["en", "zh-TW"]) {
-                const { TranslatedText } = await test(content as string, 'ja', lang);
-                pushItemsTranslation.push({
-                    id: uuidv4(),
-                    postId,
-                    content: TranslatedText,
-                    header,
-                    lang,
-                    createdAt,
-                    updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                    __typename: "IsCommentsTranslations"
-                });
-            }
-
+            // for (const lang of ["en", "zh-TW"]) {
+            //     const { TranslatedText } = await test(content as string, 'ja', lang);
+            //     pushItemsTranslation.push({
+            //         id: uuidv4(),
+            //         postId,
+            //         content: TranslatedText,
+            //         header,
+            //         lang,
+            //         createdAt,
+            //         updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+            //         __typename: "IsCommentsTranslations"
+            //     } as IS_COMMENTS_TRANSLATIONS_INPUT);
+            // }
             // メインコンテンツのプロンプトパーツに追加
             mainContPromptParts.comments.push(promptContent as string);
         }
     }
 
     // コメントの一括登録
-    await batchWriteItems(pushItems);
-
+    await batchWriteItems(TABLE_NAME_IS_COMMENTS, pushItems);
+    // コメントの一括登録
+    // await batchWriteItems(TABLE_NAME_IS_COMMENTS_TRANSLATIONS, pushItemsTranslation);
     // メインコンテンツのプロンプト作成
     await createdMainContentPrompt(mainContPromptParts);
 
@@ -424,7 +425,7 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
 
 
 // コメントをバッチ登録する関数
-async function batchWriteItems(items: IS_COMMENTS_INPUT[]) {
+async function batchWriteItems(tableName: string, items: IS_COMMENTS_INPUT[] | IS_COMMENTS_TRANSLATIONS_INPUT[]) {
     console.info("batchWriteItems IN:", items.length);
     // バッチ分割
     const batches = [];
@@ -433,8 +434,8 @@ async function batchWriteItems(items: IS_COMMENTS_INPUT[]) {
     }
     const putRequestsArray = batches.map(batch => ({
         RequestItems: {
-            [TABLE_NAME_IS_COMMENTS]: batch.map(item => ({
-                PutRequest: { Item: item as IS_COMMENTS_INPUT },
+            [tableName]: batch.map(item => ({
+                PutRequest: { Item: item as IS_COMMENTS_INPUT | IS_COMMENTS_TRANSLATIONS_INPUT },
             })),
         },
     }));
