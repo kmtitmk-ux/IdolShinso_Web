@@ -9,7 +9,7 @@ Amplify.configure(outputs, { ssr: true });
  */
 export async function GET() {
     try {
-        const { body } = await downloadData({ path: "private/sitemap.xml" }).result;
+        const { body } = await downloadData({ path: "public/sitemap.xml" }).result;
         const xmlText = await body.text();
         return new NextResponse(xmlText, {
             status: 200,
