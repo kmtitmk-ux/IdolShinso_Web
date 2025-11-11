@@ -13,6 +13,8 @@ import {
     S3Client,
     PutObjectCommand,
     GetObjectCommand,
+    ListObjectsV2Command,
+    DeleteObjectCommand,
     NoSuchKey,
     S3ServiceException
 } from "@aws-sdk/client-s3";
@@ -42,9 +44,8 @@ const TABLE_NAME_IS_TERMS = `IsTerms-${TABLE_ID}`;
 const TABLE_NAME_IS_COMMENTS = `IsComments-${TABLE_ID}`;
 const TABLE_NAME_IS_POSTS_TRANSLATIONS = `IsPostsTranslations-${TABLE_ID}`;
 const TABLE_NAME_IS_COMMENTS_TRANSLATIONS = `IsCommentsTranslations-${TABLE_ID}`;
-
+const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
 const MAX_BATCH_SIZE = 25;
-
 const TITLE_PROMPT = `以下のJSONL形式のデータには、各行に "title" キーを持つブログタイトルが含まれています。
 それぞれの "title" を、SEO対策とCTA（行動喚起）を意識して魅力的にリライトしてください。
 リライトしたタイトルは "rewrittenTitle" キーに格納してください。
@@ -61,7 +62,6 @@ const TITLE_PROMPT = `以下のJSONL形式のデータには、各行に "title"
 - 各行に "title" と "rewrittenTitle" を含めること
 - "rewrittenTitle" にはリライト済みのタイトルを格納すること
 `;
-
 const MAIN_CONTENT_PROMPT = `以下に与える「タイトル」「カテゴリー」「タグ」「コメント」をもとに、ブログ記事を作成してください。
 
 タイトル: {title}
@@ -89,6 +89,29 @@ ID:
 出力形式:
 - ID : [ID]
 - HTML: [記事のHTMLをここに記載する]
+
+`;
+const SHORT_CONTENT_PROMPT = `以下に与える「タイトル」「カテゴリー」「タグ」「コメント」をもとに、SNS用の投稿テキストを作成してください。
+
+ID: {id}
+
+タイトル: {title}
+
+カテゴリー: {category}
+
+タグ:
+{tags}
+
+コメント:
+{comments}
+
+要件:
+- 文字数：日本語で**140文字**以内。
+- トーン：感情的な表現、喜怒哀楽をはっきり表現する。
+
+出力形式:
+- ID : [ID]
+- TEXT: [SNS用の投稿テキストをここに記載]
 
 `;
 // type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
@@ -125,7 +148,6 @@ export const handler: Handler = async (event: any) => {
                 if (!href) continue;
                 await scrapingContent(href, title, outputResults);
             }
-
             // プロンプト作成
             let inputData = TITLE_PROMPT + "\n";
             inputData += outputResults.map((item: any) => {
@@ -138,22 +160,71 @@ export const handler: Handler = async (event: any) => {
             if (titleData) await updateRewriteTitle(titleData);
             break;
         case "updateMainContent":
-            const articlesTxt = await getObjetS3(`private/edit/main_articles.yml`) as string;
-            type ArticlesList = { articles: Record<string, string>[]; };
-            const { articles } = yaml.load(articlesTxt) as ArticlesList;
-            console.info("yaml data", articles);
-            for (const article of articles) {
-                const param: UpdateCommandInput = {
-                    TableName: TABLE_NAME_IS_POSTS,
-                    Key: { id: article.id },
-                    UpdateExpression: "SET #content = :content",
-                    ExpressionAttributeNames: { "#content": "content" },
-                    ExpressionAttributeValues: { ":content": article.html },
-                    ConditionExpression: "attribute_exists(id)",
-                    ReturnValues: "UPDATED_NEW"
-                };
-                console.info("Update param", JSON.stringify(param));
-                await docClient.send(new UpdateCommand(param));
+            const { Contents = [] } = await s3Client.send(new ListObjectsV2Command({
+                Bucket: BUCKET_NAME_IS_01,
+                Prefix: "private/edit/"
+            }));
+            for (const v of ["main", "short"]) {
+                const articlesTxt = await getObjetS3(`private/edit/${v}_articles.yml`) as string;
+                type ArticlesList = { articles: Record<string, string>[]; };
+                const { articles } = yaml.load(articlesTxt) as ArticlesList;
+                console.info("yaml data", articles);
+                for (const article of articles) {
+                    try {
+                        switch (v) {
+                            case "main":
+                                const updateParam: UpdateCommandInput = {
+                                    TableName: TABLE_NAME_IS_POSTS,
+                                    Key: { id: article.id },
+                                    UpdateExpression: "SET #content = :content",
+                                    ExpressionAttributeNames: { "#content": "content" },
+                                    ExpressionAttributeValues: { ":content": article.html },
+                                    ReturnValues: "UPDATED_NEW",
+                                    ConditionExpression: "attribute_exists(id)"
+                                };
+                                console.info("Update docClient param", JSON.stringify(updateParam));
+                                await docClient.send(new UpdateCommand(updateParam));
+                                break;
+                            case "short":
+                                const date = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
+                                const putParam: PutCommandInput = {
+                                    TableName: TABLE_NAME_IS_SNS,
+                                    Item: {
+                                        id: uuidv4(),
+                                        contentText: article.TEXT,
+                                        engagementLike: 0,
+                                        engagementComment: 0,
+                                        engagementShare: 0,
+                                        postId: article.id,
+                                        platform: "",
+                                        status: "scheduled",
+                                        createdAt: date,
+                                        updatedAt: date,
+                                        __typename: "IsSns"
+                                    }
+                                };
+                                console.info("Put docClient param", putParam);
+                                await docClient.send(new PutCommand(putParam));
+                                break;
+                        }
+                        const Key = Contents.filter(c => c.Key?.includes(`${v}Content_${article.id}`))[0]?.Key;
+                        if (Key) {
+                            const deleteS3Param = {
+                                Bucket: BUCKET_NAME_IS_01,
+                                Key
+                            };
+                            console.info("Delete s3Client param", deleteS3Param);
+                            await s3Client.send(new DeleteObjectCommand(deleteS3Param));
+                        }
+                    } catch (e: any) {
+                        console.error("Error processing article", article, e);
+                        if ((e as any).errorType === "ValidationException" || (e as any).errorType === "ConditionalCheckFailedException") {
+                            console.warn(`Item with id ${article.id} does not exist. Skipping update.`);
+                            continue;
+                        }
+                        throw e;
+                    }
+                }
             }
             break;
         case "createSitemap":
@@ -207,6 +278,7 @@ async function generateSitemapXml(posts: { slug: string; lastModified: string; }
 }
 
 
+// 翻訳関数
 async function test(text: string, sourceLanguageCode: string, targetLanguageCode: string) {
     const translateCommand = new TranslateTextCommand({
         Text: text,
@@ -235,8 +307,6 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
         { ":title": title }
     );
     if (psotItem.length) return;
-
-    console.info("axios", link);
     const res = await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
     await new Promise(res => setTimeout(res, 1000));
     const postId = uuidv4();
@@ -410,17 +480,25 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
 };
 
 
-// メインコンテンツのプロンプト作成
+// コンテンツ作成のプロンプト作成
 async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts) {
     const { id, title, category, tags, comments } = mainContPromptParts;
     console.info("createdMainContentPrompt IN:", JSON.stringify(mainContPromptParts));
     if (!title || !category || !tags.length || !comments.length) return;
-    let inputData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)
+    // メインコンテンツ
+    const mainContentData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
         .replace("{category}", category)
         .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
         .replace("{comments}", `${comments.map(item => `- ${item}`).join("\n")}`);
-    await outPutS3(inputData, `mainContent_${mainContPromptParts.id}`);
+    await outPutS3(mainContentData, `mainContent_${mainContPromptParts.id}`);
+    // ショートコンテンツ
+    const shortContentData = (`${SHORT_CONTENT_PROMPT}\n`).replace("{title}", title)
+        .replace("{id}", id)
+        .replace("{category}", category)
+        .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
+        .replace("{comments}", `${comments.map(item => `- ${item}`).join("\n")}`);
+    await outPutS3(shortContentData, `shortContent_${mainContPromptParts.id}`);
 }
 
 
@@ -597,41 +675,50 @@ async function updateRewriteTitle(titleData: string) {
         .filter(line => line.trim() !== '')
         .map(line => JSON.parse(line));
     for (const v of newTitleData) {
-        const param: UpdateCommandInput = {
-            TableName: TABLE_NAME_IS_POSTS,
-            Key: { id: v.id },
-            UpdateExpression: "SET #rewrittenTitle = :rewrittenTitle, #status = :status",
-            ExpressionAttributeNames: {
-                "#rewrittenTitle": "rewrittenTitle",
-                "#status": "status"
-            },
-            ExpressionAttributeValues: {
-                ":rewrittenTitle": v.rewrittenTitle,
-                ":status": "published"
-            },
-            ConditionExpression: "attribute_exists(id)",
-            ReturnValues: "UPDATED_NEW"
-        };
-        console.info("Update param", JSON.stringify(param));
-        await docClient.send(new UpdateCommand(param));
-
-        // 各言語に翻訳して保存
-        for (const lang of ["en", "zh-TW"]) {
-            const { TranslatedText } = await test(v.rewrittenTitle, 'ja', lang);
-            const param: PutCommandInput = {
-                TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
-                Item: {
-                    id: uuidv4(),
-                    postId: v.id,
-                    lang,
-                    rewrittenTitle: TranslatedText,
-                    createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                    updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-                    __typename: "IsPostsTranslations"
-                }
+        try {
+            const param: UpdateCommandInput = {
+                TableName: TABLE_NAME_IS_POSTS,
+                Key: { id: v.id },
+                UpdateExpression: "SET #rewrittenTitle = :rewrittenTitle, #status = :status",
+                ExpressionAttributeNames: {
+                    "#rewrittenTitle": "rewrittenTitle",
+                    "#status": "status"
+                },
+                ExpressionAttributeValues: {
+                    ":rewrittenTitle": v.rewrittenTitle,
+                    ":status": "published"
+                },
+                ConditionExpression: "attribute_exists(id)",
+                ReturnValues: "UPDATED_NEW"
             };
-            console.info("PutCommand param", param);
-            await docClient.send(new PutCommand(param));
+            console.info("Update param", JSON.stringify(param));
+            await docClient.send(new UpdateCommand(param));
+
+            // 各言語に翻訳して保存
+            for (const lang of ["en", "zh-TW"]) {
+                const { TranslatedText } = await test(v.rewrittenTitle, 'ja', lang);
+                const param: PutCommandInput = {
+                    TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                    Item: {
+                        id: uuidv4(),
+                        postId: v.id,
+                        lang,
+                        rewrittenTitle: TranslatedText,
+                        createdAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                        updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
+                        __typename: "IsPostsTranslations"
+                    }
+                };
+                console.info("PutCommand param", param);
+                await docClient.send(new PutCommand(param));
+            }
+        } catch (e) {
+            console.error("Error updating title:", v, e);
+            if ((e as any).errorType === "ValidationException" || (e as any).errorType === "ConditionalCheckFailedException") {
+                console.warn(`Item with id ${v.id} does not exist. Skipping update.`);
+                continue;
+            }
+            throw e;
         }
     }
 }

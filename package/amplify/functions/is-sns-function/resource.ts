@@ -1,6 +1,6 @@
 import { defineFunction } from "@aws-amplify/backend";
 
-export const myFirstFunctionEnvConfig = {
+export const isSnsFunctionEnvConfig = {
     main: {
         TABLE_ID:"lwae74brlvfstbdkoxvvvdcofq-NONE",
         BUCKET_NAME_IS_01: "amplify-dtb1zhx1jvcon-main-bran-is01bucketd5d9d3bb-q8ierlcpxzjp",
@@ -12,10 +12,10 @@ export const myFirstFunctionEnvConfig = {
 };
 type Branch = "main" | "develop";
 const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
-const selectedConfig = myFirstFunctionEnvConfig[branch] || myFirstFunctionEnvConfig.develop;
+const selectedConfig = isSnsFunctionEnvConfig[branch] || isSnsFunctionEnvConfig.develop;
 
-export const myFirstFunction = defineFunction({
-    name: "my-first-function",
+export const isSnsFunction = defineFunction({
+    name: "is-sns-function",
     entry: "./handler.ts",
     timeoutSeconds: 900,
     environment: {

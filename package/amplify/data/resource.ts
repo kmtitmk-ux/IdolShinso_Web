@@ -34,7 +34,8 @@ const schema = a.schema({
             comments: a.hasMany('IsComments', 'postId'),
             commentsTranslations: a.hasMany('IsCommentsTranslations', 'postId'),
             postmeta: a.hasMany('IsPostMeta', 'postId'),
-            postsTranslations: a.hasMany('IsPostsTranslations', 'postId')
+            postsTranslations: a.hasMany('IsPostsTranslations', 'postId'),
+            sns: a.hasMany('IsSns', 'postId')
         })
         .secondaryIndexes((index) => [
             index('title'),
@@ -106,6 +107,20 @@ const schema = a.schema({
         })
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
+        ])
+        .authorization((allow) => [allow.guest()]),
+    IsSns: a
+        .model({
+            contentText: a.string(),
+            postId: a.id(),
+            platform: a.string(),
+            snsPostId: a.string(),
+            status: a.string().required(),
+            updatedAt: a.datetime(),
+            post: a.belongsTo('IsPosts', 'postId')
+        })
+        .secondaryIndexes((index) => [
+            index('status').sortKeys(['updatedAt'])
         ])
         .authorization((allow) => [allow.guest()]),
 });

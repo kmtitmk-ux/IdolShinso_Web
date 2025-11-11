@@ -59,51 +59,78 @@ const Category = async ({ params }: PageProps) => {
     const { slug, lang } = await params;
     console.info("slug", decodeURIComponent(slug));
     const slugTaxonomy = `${decodeURIComponent(slug)}_category`;
-    const { data, nextToken } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
-        slugTaxonomy,
-    }, {
-        limit: 8,
-        selectionSet: [
-            "post.id",
-            "post.slug",
-            "post.title",
-            "post.rewrittenTitle",
-            "post.thumbnail",
-            "post.createdAt",
-            "id",
-            "slug",
-            "name"
-        ]
-    });
+    let nextToken: string | null = null;
+    let listData: any = [];
+    const selectionSet = [
+        "post.id",
+        "post.slug",
+        "post.title",
+        "post.rewrittenTitle",
+        "post.thumbnail",
+        "post.createdAt",
+        "id",
+        "slug",
+        "name"
+    ] as const;
+    let listParams = {
+        limit: 4,
+        selectionSet,
+        nextToken: null as string | null
+    };
+    do {
+        const { data, nextToken: newNextToken } = await cookiesClient.models.IsPostMeta
+            .listIsPostMetaBySlugTaxonomyAndCreatedAt({ slugTaxonomy }, listParams);
+            const filterData = data.filter(v => v.post != null)
+        listData = [...listData, ...filterData];
+        if (newNextToken) listParams.nextToken = nextToken = newNextToken;
+        if (!newNextToken || listData.length >= listParams.limit) break;
+    } while (true);
+
     // 翻訳データ取得
     const editData: any = [];
-    for (const v of data) {
-        const post = {
-            ...v.post,
-            postmeta: [{
-                id: v.id,
-                slug: v.slug,
-                name: v.name
-            }]
-        };
-        const { data } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-            postId: v.post.id
-        }, {
-            filter: { lang: { eq: lang } },
-            selectionSet: ["rewrittenTitle"]
-        });
-        post.rewrittenTitle = data[0]?.rewrittenTitle ?? v.post.title;
-        editData.push({ ...post });
+    for (const v of listData) {
+        if (v.post) {
+            const post: {
+                id: string;
+                slug: string;
+                title: string;
+                rewrittenTitle?: string;
+                thumbnail?: string;
+                createdAt?: string;
+                postmeta: {
+                    id: string;
+                    slug: string;
+                    name: string;
+                }[];
+            } = {
+                id: v.post.id,
+                slug: v.post.slug,
+                title: v.post.title,
+                rewrittenTitle: v.post?.rewrittenTitle ?? "",
+                thumbnail: v.post?.thumbnail ?? "",
+                createdAt: v.post?.createdAt ?? "",
+                postmeta: [{
+                    id: v?.id ?? "",
+                    slug: v.slug,
+                    name: v.name
+                }]
+            };
+            const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
+                postId: post?.id
+            }, {
+                filter: { lang: { eq: lang } },
+                selectionSet: ["rewrittenTitle"]
+            });
+            if (translationsData?.length) post.rewrittenTitle = translationsData[0]?.rewrittenTitle ?? "";
+            editData.push({ ...post });
+        }
     }
     return (
         <>
-            <PageContainer title={data[0]?.name ?? ""} description="">
+            <PageContainer title={listData[0]?.name ?? ""} description="">
                 <Box>
                     <Grid container spacing={3}>
-                        <Blog
-                            data={editData}
-                            lang={lang}
-                        />
+                        {editData.length ? <Blog data={editData} lang={lang} /> : ""}
                         <NextPage
                             token={nextToken ?? ""}
                             queryType={"category"}

@@ -41,6 +41,7 @@ const NextPage = ({
             }
         }, { threshold: 1 });
         observer.observe(currentLoader);
+
         return () => {
             if (currentLoader) observer.unobserve(currentLoader);
         };
@@ -57,46 +58,79 @@ const NextPage = ({
         try {
             switch (queryType) {
                 case "category":
-                    console.log(pk);
-                    res = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
-                        slugTaxonomy: pk
-                    }, {
+                    console.log("fetch category", pk, nextToken);
+                    const categoryListParams: any = {
                         sortDirection: "DESC",
                         limit: 8,
                         nextToken: nextToken,
                         selectionSet: [
+                            "id",
+                            "slug",
+                            "name",
                             "post.id",
                             "post.slug",
-                            "post.status",
                             "post.title",
                             "post.rewrittenTitle",
                             "post.thumbnail",
                             "post.createdAt",
-                            "id",
-                            "slug",
-                            "name"
-                        ]
-                    });
-                    console.log("category editData", pk, res);
+                            "post.postmeta.id",
+                            "post.postmeta.slug",
+                            "post.postmeta.name",
+                            "post.postmeta.taxonomy",
+                            "post.postsTranslations.lang",
+                            "post.postsTranslations.rewrittenTitle"
+                        ],
+                    };
+                    let categoryList: any[] = [];
+                    do {
+                        const tempRes = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
+                            slugTaxonomy: pk
+                        }, categoryListParams);
 
-                    // 翻訳データ取得
+                        const filterData = (tempRes.data ?? []).filter((item: any) => item.post !== null);
+                        // console.log("tempRes", filterData);
+                        categoryList = [...categoryList, ...filterData];
+                        categoryListParams.nextToken = tempRes.nextToken;
+                    } while (categoryListParams.nextToken);
+
+                    
                     const editData: any = [];
-                    for (const v of res.data ?? []) {
-                        const post = {
-                            ...v.post,
+                    for (const v of categoryList) {
+
+                        // 翻訳データがあればそちらを優先
+                        const postsTranslations = v.post.postsTranslations.filter((pm: any) => {
+                            if (lang !== "ja") {
+                                return pm.lang === lang;
+                            } else {
+                                return false;
+                            }
+                        })[0];
+
+                        const post: {
+                            id: string;
+                            slug: string;
+                            title: string;
+                            rewrittenTitle?: string;
+                            thumbnail?: string;
+                            createdAt?: string;
+                            postmeta: {
+                                id: string;
+                                slug: string;
+                                name: string;
+                            }[];
+                        } = {
+                            id: v.post.id,
+                            slug: v.post.slug,
+                            title: v.post.title,
+                            rewrittenTitle: postsTranslations?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "",
+                            thumbnail: v.post?.thumbnail ?? "",
+                            createdAt: v.post?.createdAt ?? "",
                             postmeta: [{
-                                id: v.id,
+                                id: v?.id ?? "",
                                 slug: v.slug,
                                 name: v.name
                             }]
                         };
-                        const { data } = await client.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-                            postId: v.post.id
-                        }, {
-                            filter: { lang: { eq: lang } },
-                            selectionSet: ["rewrittenTitle"]
-                        });
-                        post.rewrittenTitle = data[0]?.rewrittenTitle ?? v.post.title;
                         editData.push({ ...post });
                     }
                     setItems((prev) => [...prev, ...editData]);

@@ -1,0 +1,18 @@
+{
+  "name": "is-sns-function",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.919.0",
+    "@aws-sdk/lib-dynamodb": "^3.919.0",
+    "axios": "^1.13.1",
+    "dayjs": "^1.11.19",
+    "twitter-api-v2": "^1.27.0"
+  }
+}

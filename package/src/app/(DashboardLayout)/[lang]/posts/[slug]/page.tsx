@@ -24,15 +24,59 @@ export async function generateMetadata({ params }: PageProps) {
         slug: decodeURIComponent(slug)
     }, {
         selectionSet: [
+            "id",
             "title",
-            "rewrittenTitle"
+            "rewrittenTitle",
+            "thumbnail"
         ]
     });
-    const title = data[0].rewrittenTitle || data[0].title;
-    const description = data[0].rewrittenTitle || data[0].title;
+    const id = data[0]?.id as string;
+    const siteTitle = lang === "ja" ? "アイドル深層" : lang === "en" ? "Idol Shinsou" : "偶像深層";
+    const locale = lang === "ja" ? "ja_JP" : lang === "en" ? "en_US" : "zh-TW";
+    const thumbnail = data[0].thumbnail;
+    let title = data[0].rewrittenTitle || data[0].title;
+    let description = data[0].rewrittenTitle || data[0].title;
+    if (lang !== "ja") {
+        const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
+            { postId: id },
+            {
+                filter: { lang: { eq: lang } },
+                selectionSet: [
+                    "id",
+                    "rewrittenTitle",
+                    "content",
+                ]
+            }
+        );
+        title = translationsData[0]?.rewrittenTitle || title;
+        description = translationsData[0]?.rewrittenTitle || description;
+    }
     return {
-        title: `${title}｜アイドル深層`,
-        description: `${description}。アイドル深層`
+        title: `${title} | ${siteTitle}`,
+        description: `${description}。${siteTitle}`,
+        openGraph: {
+            title: title,
+            description: description,
+            url: `https://geinouwasa.com/posts/${slug}`,
+            siteName: siteTitle,
+            images: [
+                {
+                    url: `https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`,
+                    width: 1200,
+                    height: 630,
+                    alt: title,
+                },
+            ],
+            locale,
+            type: 'article',
+        },
+        twitter: {
+            card: 'summary_large_image',
+            title: title,
+            description: description,
+            images: [`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`],
+            creator: '@IdolShinso',
+        },
     };
 }
 const SamplePage = async ({ params }: PageProps) => {

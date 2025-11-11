@@ -29,11 +29,11 @@ const Blog = ({
     data: any[];
     lang: string;
 }) => {
-    console.log("Blog data", data);
+    console.log("Blog", data);
     return (
         <>
             {data.map((product: any, index: number) => {
-                const postmeta = product?.postmeta[0] ?? [];
+                const postmeta = product?.postmeta[0] || { name: "", slug: "" };
                 const postLink = lang === "ja" ? `/posts/${product.slug}` : `/${lang}/posts/${product.slug}`;
                 const termLink = lang === "ja" ? `/category/${postmeta.slug}` : `/${lang}/category/${postmeta.slug}`;
                 return (
@@ -52,7 +52,7 @@ const Blog = ({
                                 <div style={{ width: '100%', height: 150, position: 'relative' }}>
                                     <Image
                                         src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${product.thumbnail as string}`}
-                                        alt={product?.rewrittenTitle || product?.title}
+                                        alt={product?.rewrittenTitle || product?.title || 'thumbnail'}
                                         fill
                                         style={{ objectFit: 'cover' }}
                                     />
@@ -101,7 +101,7 @@ const Blog = ({
                         </BlankCard>
                     </Grid>
                 );
-            })}
+            }).filter(Boolean)}
         </>
     );
 };

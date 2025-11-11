@@ -1,9 +1,10 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data } from './data/resource';
-import { myFirstFunction, envConfig } from './functions/my-first-function/resource';
+import { myFirstFunction, myFirstFunctionEnvConfig } from './functions/my-first-function/resource';
+import { isSnsFunction } from './functions/is-sns-function/resource';
 import { storage } from './storage/resource';
-import { aws_events } from "aws-cdk-lib";
+import { aws_events, aws_stepfunctions } from "aws-cdk-lib";
 import {
     Effect,
     PolicyDocument,
@@ -12,8 +13,6 @@ import {
     ServicePrincipal,
 } from "aws-cdk-lib/aws-iam";
 
-import * as events from 'aws-cdk-lib/aws-events';
-
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
  */
@@ -21,19 +20,110 @@ export const backend = defineBackend({
     auth,
     data,
     myFirstFunction,
+    isSnsFunction,
     storage
 });
 
-const eventStack = backend.createStack("MyExternalDataSources");
-const eventBus = aws_events.EventBus.fromEventBusName(
-    eventStack,
-    "MyEventBus",
+const APP_ID = process.env.AWS_APP_ID || "dtb1zhx1jvcon";
+type Branch = "main" | "develop";
+const BRANCH: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
+const externalStack = backend.createStack("MyExternalDataSources");
+const lambdaMyFirstFunctionAttrArn = backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn;
+const lambdaIsSnsFunctionAttrArn = backend.isSnsFunction.resources.cfnResources.cfnFunction.attrArn;
+const StepFunctions = backend
+
+
+/**
+ * StepFunctions ステートマシーン作成
+ */
+
+// ステートマシーンのロールを作成
+const IsLambdaInvokerBusRole = new Role(externalStack, "IsLambdaInvoker", {
+    assumedBy: new ServicePrincipal("states.amazonaws.com"),
+    inlinePolicies: {
+        LambdaInvokePolicy: new PolicyDocument({
+            statements: [
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: ["lambda:InvokeFunction"],
+                    resources: [lambdaIsSnsFunctionAttrArn],
+                }),
+            ],
+        }),
+    },
+});
+const IsRandomSnsLambdaInvoker = new aws_stepfunctions.CfnStateMachine(externalStack, 'IsRandomSnsLambdaInvoker', {
+    definitionString: JSON.stringify(
+        {
+            "StartAt": "RandomWait",
+            "States": {
+                "RandomWait": {
+                    "Type": "Pass",
+                    "ResultPath": "$.waitSeconds",
+                    "Result": 220,
+                    "Next": "WaitState"
+                },
+                "WaitState": {
+                    "Type": "Wait",
+                    "SecondsPath": "$.waitSeconds",
+                    "Next": "RunLambda"
+                },
+                "RunLambda": {
+                    "Type": "Task",
+                    "Resource": lambdaIsSnsFunctionAttrArn,
+                    "End": true
+                }
+            }
+        }
+    ),
+    roleArn: IsLambdaInvokerBusRole.roleArn,
+});
+
+
+/**
+ * EventBridge から StepFunctions を呼び出す設定
+ */
+// EventBridgeのIAM ロールを作成
+const eventBusForStepFuncRole = new Role(externalStack, "EventBridgeInvokeStepFuncRole", {
+    assumedBy: new ServicePrincipal("events.amazonaws.com"),
+    inlinePolicies: {
+        StepFunctionInvokePolicy: new PolicyDocument({
+            statements: [
+                new PolicyStatement({
+                    effect: Effect.ALLOW,
+                    actions: ["states:StartExecution"],
+                    resources: [IsRandomSnsLambdaInvoker.attrArn],
+                }),
+            ],
+        }),
+    },
+});
+const eventBusForStepFunc = aws_events.EventBus.fromEventBusName(
+    externalStack,
+    "MyEventBusForStepFunc",
     "default"
 );
-backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
-const lambdaFunction = backend.myFirstFunction.resources.cfnResources.cfnFunction;
-// IAM ロールを作成（EventBridge が Lambda を呼び出す権限）
-const eventBusRole = new Role(eventStack, "EventBridgeInvokeLambdaRole", {
+backend.data.addEventBridgeDataSource("MyEventBridgeDataSourceForStepFunc", eventBusForStepFunc);
+new aws_events.CfnRule(externalStack, "StepFunctionTriggerRule", {
+    eventBusName: eventBusForStepFunc.eventBusName,
+    name: process.env.RULE_NAME_IS_02 ?? `triggerStepFunction-${APP_ID}-${BRANCH}`,
+    scheduleExpression: "cron(0 0,6 ? * * *)",
+    state: BRANCH === "main" ? "ENABLED" : "DISABLED",
+    targets: [
+        {
+            id: "TriggerStepFunctionTarget",
+            arn: IsRandomSnsLambdaInvoker.attrArn,
+            roleArn: eventBusForStepFuncRole.roleArn,
+        }
+    ]
+}); 
+
+
+/**
+ * EventBridge から Lambda を呼び出す設定
+ */
+// EventBridgeのIAM ロールを作成
+const eventBusRole = new Role(externalStack, "EventBridgeInvokeLambdaRole", {
     assumedBy: new ServicePrincipal("events.amazonaws.com"),
     inlinePolicies: {
         LambdaInvokePolicy: new PolicyDocument({
@@ -41,43 +131,45 @@ const eventBusRole = new Role(eventStack, "EventBridgeInvokeLambdaRole", {
                 new PolicyStatement({
                     effect: Effect.ALLOW,
                     actions: ["lambda:InvokeFunction"],
-                    resources: [lambdaFunction.attrArn],
+                    resources: [lambdaMyFirstFunctionAttrArn],
                 }),
             ],
         }),
     },
 });
-
-const appId = process.env.AWS_APP_ID || "dtb1zhx1jvcon";
-type Branch = "main" | "develop";
-const branch: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
-// EventBridge ルールを作成
-new aws_events.CfnRule(eventStack, "OrderStatusRule", {
+const eventBus = aws_events.EventBus.fromEventBusName(
+    externalStack,
+    "MyEventBus",
+    "default"
+);
+backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
+new aws_events.CfnRule(externalStack, "OrderStatusRule", {
     eventBusName: eventBus.eventBusName,
-    name: process.env.RULE_NAME_IS_01 ?? `processOrderStatusChange-${appId}-${branch}`,
+    name: process.env.RULE_NAME_IS_01 ?? `processOrderStatusChange-${APP_ID}-${BRANCH}`,
     scheduleExpression: "cron(0 0 ? * * *)",
-    state: branch === "main" ? "ENABLED" : "DISABLED",
+    state: BRANCH === "main" ? "ENABLED" : "DISABLED",
     targets: [
         {
             id: "ProcessOrderTarget",
-            arn: lambdaFunction.attrArn,
+            arn: lambdaMyFirstFunctionAttrArn,
             roleArn: eventBusRole.roleArn,
             input: JSON.stringify({ procType: "scrapingContent" })
         },
         {
             id: "IsCreateSitemap",
-            arn: lambdaFunction.attrArn,
+            arn: lambdaMyFirstFunctionAttrArn,
             roleArn: eventBusRole.roleArn,
             input: JSON.stringify({ procType: "createSitemap" })
-        },
-    ],
+        }
+    ]
 });
 
 
-
-// 関数のIAMロールにポリシーをアタッチ
-const functionRole = backend.myFirstFunction.resources.lambda.role;
-functionRole?.addToPrincipalPolicy(
+/**
+ * LambdaのIAMロールにポリシーをアタッチ
+ */
+const myFirstFunctionRole = backend.myFirstFunction.resources.lambda.role;
+myFirstFunctionRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: [
@@ -91,28 +183,50 @@ functionRole?.addToPrincipalPolicy(
             `arn:aws:dynamodb:*:*:table/IsPostMeta*`,
             `arn:aws:dynamodb:*:*:table/IsTerms*`,
             `arn:aws:dynamodb:*:*:table/IsComments*`,
-        ],
+            `arn:aws:dynamodb:*:*:table/IsSns*`,
+        ]
     })
 );
-const s3BucketName = process.env.BUCKET_NAME_IS_01 || envConfig[branch]?.BUCKET_NAME_IS_01;
-functionRole?.addToPrincipalPolicy(
+const s3BucketName = process.env.BUCKET_NAME_IS_01 || myFirstFunctionEnvConfig[BRANCH]?.BUCKET_NAME_IS_01;
+myFirstFunctionRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: [
             's3:PutObject',
             's3:GetObject',
+            's3:DeleteObject',
             's3:ListBucket'
         ],
         resources: [
-            `arn:aws:s3:::${s3BucketName}/`,
+            `arn:aws:s3:::${s3BucketName}`,
             `arn:aws:s3:::${s3BucketName}/*`
-        ],
+        ]
     })
 );
-functionRole?.addToPrincipalPolicy(
+myFirstFunctionRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: ['translate:TranslateText'],
         resources: ['*']
+    })
+);
+
+const isSnsFunctionRole = backend.isSnsFunction.resources.lambda.role;
+isSnsFunctionRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+            // 'dynamodb:BatchWriteItem',
+            'dynamodb:GetItem',
+            'dynamodb:UpdateItem',
+            'dynamodb:Query'
+        ],
+        resources: [
+            `arn:aws:dynamodb:*:*:table/IsPosts*`,
+            // `arn:aws:dynamodb:*:*:table/IsPostMeta*`,
+            // `arn:aws:dynamodb:*:*:table/IsTerms*`,
+            // `arn:aws:dynamodb:*:*:table/IsComments*`,
+            `arn:aws:dynamodb:*:*:table/IsSns*`,
+        ]
     })
 );
