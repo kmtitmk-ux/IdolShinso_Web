@@ -23,7 +23,6 @@ const NextPage = ({
     pk: string;
     lang: string;
 }) => {
-    console.info("NextPage", queryType, pk, lang);
     const [items, setItems] = useState<any[]>([]);
     const [loading, setLoading] = useState(false);
     const [nextToken, setNextToken] = useState<string | null>(token);
@@ -32,6 +31,10 @@ const NextPage = ({
     const client = generateClient<Schema>();
 
     useEffect(() => {
+        if (nextToken) {
+            const buffer = Buffer.from(nextToken, 'base64');
+            console.log(buffer.toString('utf8'));
+        }
         if (!loader.current) return;
         const currentLoader = loader.current;
         const observer = new IntersectionObserver((entries) => {
@@ -58,7 +61,7 @@ const NextPage = ({
         try {
             switch (queryType) {
                 case "category":
-                    console.log("fetch category", pk, nextToken);
+                    console.info("fetch category", pk);
                     const categoryListParams: any = {
                         sortDirection: "DESC",
                         limit: 8,
@@ -86,14 +89,12 @@ const NextPage = ({
                         const tempRes = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
                             slugTaxonomy: pk
                         }, categoryListParams);
-
                         const filterData = (tempRes.data ?? []).filter((item: any) => item.post !== null);
-                        // console.log("tempRes", filterData);
                         categoryList = [...categoryList, ...filterData];
                         categoryListParams.nextToken = tempRes.nextToken;
-                    } while (categoryListParams.nextToken);
-
-                    
+                        res.nextToken = tempRes.nextToken;
+                        if (!tempRes.nextToken || categoryList.length >= categoryListParams.limit) break;
+                    } while (true);
                     const editData: any = [];
                     for (const v of categoryList) {
 
@@ -134,7 +135,6 @@ const NextPage = ({
                         editData.push({ ...post });
                     }
                     setItems((prev) => [...prev, ...editData]);
-                    setNextToken(res?.nextToken ?? null);
                     break;
                 default:
                     res = await client.models.IsPosts.listIsPostsByStatusAndCreatedAt({
@@ -178,8 +178,9 @@ const NextPage = ({
                             })
                         };
                     });
+                    setItems((prev) => [...prev, ...(res?.data ?? [])]);
+                    break;
             }
-            setItems((prev) => [...prev, ...(res?.data ?? [])]);
             setNextToken(res?.nextToken ?? null);
         } catch (err) {
             console.error(err);

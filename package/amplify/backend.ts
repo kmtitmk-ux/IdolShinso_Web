@@ -30,7 +30,7 @@ const BRANCH: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 const externalStack = backend.createStack("MyExternalDataSources");
 const lambdaMyFirstFunctionAttrArn = backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn;
 const lambdaIsSnsFunctionAttrArn = backend.isSnsFunction.resources.cfnResources.cfnFunction.attrArn;
-const StepFunctions = backend
+const StepFunctions = backend;
 
 
 /**
@@ -71,6 +71,9 @@ const IsRandomSnsLambdaInvoker = new aws_stepfunctions.CfnStateMachine(externalS
                 "RunLambda": {
                     "Type": "Task",
                     "Resource": lambdaIsSnsFunctionAttrArn,
+                    "Parameters": {
+                        "procType": "postSns"
+                    },
                     "End": true
                 }
             }
@@ -116,7 +119,7 @@ new aws_events.CfnRule(externalStack, "StepFunctionTriggerRule", {
             roleArn: eventBusForStepFuncRole.roleArn,
         }
     ]
-}); 
+});
 
 
 /**

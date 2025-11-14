@@ -73,7 +73,7 @@ const Category = async ({ params }: PageProps) => {
         "name"
     ] as const;
     let listParams = {
-        limit: 4,
+        limit: 8,
         selectionSet,
         nextToken: null as string | null
     };

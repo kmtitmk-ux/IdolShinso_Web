@@ -1,4 +1,5 @@
-import { Grid, Typography } from '@mui/material';
+import Link from "next/link";
+import { Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
 import { cookiesClient } from "@/utils/amplifyServerUtils";
@@ -6,11 +7,12 @@ import Image from "next/image";
 import outputs from '@/amplify_outputs.json';
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
-
+import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
+// import from '@mui/material/Breadcrumbs';
+// import Link from '@mui/material/Link';
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
 const bucketName01 = outputs?.storage?.bucket_name ?? ""; // package/amplify_outputs.json
-
 interface PageProps {
     params: Promise<{
         slug: string;
@@ -95,6 +97,8 @@ const SamplePage = async ({ params }: PageProps) => {
                 "createdAt",
                 "postmeta.id",
                 "postmeta.name",
+                "postmeta.slug",
+                "postmeta.taxonomy",
                 "postsTranslations.lang",
                 "postsTranslations.rewrittenTitle"
             ]
@@ -115,13 +119,51 @@ const SamplePage = async ({ params }: PageProps) => {
     console.info("fetch data postData:", postData);
     console.info("fetch data commentsData:", commentsData);
     const title = postsTranslations?.rewrittenTitle || data.rewrittenTitle || "";
+    const BreadcrumbSetter = ({ title, category }: { title: string; category: { slug: string; name: string; }; }) => {
+        return (
+            <Breadcrumbs
+                aria-label="breadcrumb"
+                sx={{ mb: 2 }}
+            >
+                {(() => {
+                    const homeText = lang === "ja" ? "ホーム" : lang === "en" ? "Home" : "首頁";
+                    const homeLink = lang === "ja" ? `/` : `/${lang}`;
+                    const categoryLink = lang === "ja" ? `/category/${category.slug}` : `/${lang}/category/${category.slug}`;
+                    return (
+                        <>
+                            <Link color="inherit" href={homeLink}>{homeText}</Link>
+                            <Link color="inherit" href={categoryLink}>{category.name}</Link>
+                            <Typography sx={{ color: 'text.primary' }}>{title}</Typography>
+                        </>
+                    );
+                })()}
+            </Breadcrumbs>
+        );
+    };
+    const editData: any = [];
+    const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
     return (
         <PageContainer
             title={title}
             description="this is Sample page"
         >
+            <BreadcrumbSetter title={title} category={data.postmeta[0]} />
             <DashboardCard title={title}>
-                {/* <Image
+                {/* <List dense={false}>
+                    {
+                        tags.map((meta) => (
+                            <ListItem key={meta.id}>
+                                <Link
+                                    href={lang === "ja" ? `/tags/${meta.slug}` : `/${lang}/tags/${meta.slug}`}
+                                >
+                                    <ListItemText primary={meta.name} />
+                                </Link>
+
+                            </ListItem>
+                        ))
+                    }
+                </List> */}
+                <Image
                     src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data.thumbnail as string}`}
                     alt={title}
                     width={400}
@@ -130,15 +172,10 @@ const SamplePage = async ({ params }: PageProps) => {
                         width: '40%',
                         height: 'auto',
                         objectFit: 'cover'
-                    }
-                    }
-                /> */}
-                <div
-                    dangerouslySetInnerHTML={{
-                        __html: DOMPurify.sanitize(data.content ?? "")
                     }}
                 />
-                < Grid container spacing={3} mt={2} >
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content ?? "") }} />
+                <Grid container spacing={3} mt={2} >
                     {
                         data.comments && data.comments.map((comment) => (
                             <Grid key={comment.id} size={12}>
@@ -151,9 +188,10 @@ const SamplePage = async ({ params }: PageProps) => {
                             </Grid>
                         ))
                     }
-                </Grid >
-            </DashboardCard >
-        </PageContainer >
+                </Grid>
+            </DashboardCard>
+            <Blog data={editData} lang={lang} />
+        </PageContainer>
     );
 };
 
