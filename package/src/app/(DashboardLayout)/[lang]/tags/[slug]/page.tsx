@@ -9,7 +9,7 @@ interface PageProps {
 }
 export async function generateMetadata({ params }: PageProps) {
     const { slug, lang } = await params;
-    const slugTaxonomy = `${slug}_tags`;
+    const slugTaxonomy = `${decodeURIComponent(slug)}_tags`;
     const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
         slugTaxonomy,
     }, {
@@ -24,7 +24,7 @@ export async function generateMetadata({ params }: PageProps) {
     };
 }
 const Tag = async ({ params }: PageProps) => {
-    return <Category params={params} taxonomy="tags"/>;
+    return <Category params={params} taxonomy={"tags"} />;
 };
 
 export default Tag;
