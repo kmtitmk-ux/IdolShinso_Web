@@ -44,8 +44,8 @@ export const handler: Handler = async (event) => {
                     { "#status": "status", "#updatedAt": "updatedAt" },
                     {
                         ":status": "posted",
-                        ":start": dayjs().subtract(4, "day").toISOString(),
-                        ":end": dayjs().subtract(2, "day").toISOString()
+                        ":start": dayjs().subtract(5, "day").toISOString(),
+                        ":end": dayjs().subtract(3, "day").toISOString()
                     },
                     1
                 );
@@ -123,7 +123,7 @@ async function postSns() {
         "isSnsByStatusAndUpdatedAt",
         "#status = :status AND #updatedAt >= :updatedAt",
         { "#status": "status", "#updatedAt": "updatedAt" },
-        { ":status": "scheduled", ":updatedAt": dayjs().subtract(1, "day").toISOString() },
+        { ":status": "scheduled", ":updatedAt": dayjs().subtract(2, "day").toISOString() },
         1
     );
     const postItem = psotItems[0];

@@ -38,10 +38,11 @@ interface PageProps {
         slug: string;
         lang: string;
     }>;
+    taxonomy: undefined | "category" | "tags";
 }
-export async function generateMetadata({ params }: PageProps) {
+export async function generateMetadata({ params, taxonomy = "category" }: PageProps) {
     const { slug, lang } = await params;
-    const slugTaxonomy = `${slug}_category`;
+    const slugTaxonomy = `${slug}_${taxonomy}`;
     const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
         slugTaxonomy,
     }, {
@@ -55,10 +56,10 @@ export async function generateMetadata({ params }: PageProps) {
         description: `【${data[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
     };
 }
-const Category = async ({ params }: PageProps) => {
+const Category = async ({ params, taxonomy = "category" }: PageProps) => {
     const { slug, lang } = await params;
     console.info("slug", decodeURIComponent(slug));
-    const slugTaxonomy = `${decodeURIComponent(slug)}_category`;
+    const slugTaxonomy = `${decodeURIComponent(slug)}_${taxonomy}`;
     let nextToken: string | null = null;
     let listData: any = [];
     const selectionSet = [
@@ -80,7 +81,7 @@ const Category = async ({ params }: PageProps) => {
     do {
         const { data, nextToken: newNextToken } = await cookiesClient.models.IsPostMeta
             .listIsPostMetaBySlugTaxonomyAndCreatedAt({ slugTaxonomy }, listParams);
-            const filterData = data.filter(v => v.post != null)
+        const filterData = data.filter(v => v.post != null);
         listData = [...listData, ...filterData];
         if (newNextToken) listParams.nextToken = nextToken = newNextToken;
         if (!newNextToken || listData.length >= listParams.limit) break;

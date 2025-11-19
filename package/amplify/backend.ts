@@ -55,25 +55,66 @@ const IsLambdaInvokerBusRole = new Role(externalStack, "IsLambdaInvoker", {
 const IsRandomSnsLambdaInvoker = new aws_stepfunctions.CfnStateMachine(externalStack, 'IsRandomSnsLambdaInvoker', {
     definitionString: JSON.stringify(
         {
-            "StartAt": "RandomWait",
+            "StartAt": "GenerateWaitAndNextStep",
             "States": {
-                "RandomWait": {
+                "GenerateWaitAndNextStep": {
                     "Type": "Pass",
-                    "ResultPath": "$.waitSeconds",
-                    "Result": 220,
+                    "Parameters": {
+                        "waitSeconds.$": "$floor($random() * 10 + 5)",
+                        "nextStep": "RunPostSns"
+                    },
+                    "ResultPath": "$.wait",
                     "Next": "WaitState"
                 },
                 "WaitState": {
                     "Type": "Wait",
-                    "SecondsPath": "$.waitSeconds",
-                    "Next": "RunLambda"
+                    "SecondsPath": "$.wait.waitSeconds",
+                    "Next": "BranchStep"
                 },
-                "RunLambda": {
+                "BranchStep": {
+                    "Type": "Choice",
+                    "Choices": [
+                        {
+                            "Variable": "$.wait.nextStep",
+                            "StringEquals": "RunPostSns",
+                            "Next": "RunPostSns"
+                        },
+                        {
+                            "Variable": "$.wait.nextStep",
+                            "StringEquals": "RunCheckSns",
+                            "Next": "RunCheckSns"
+                        }
+                    ],
+                    "Default": "Fallback"
+                },
+                "RunPostSns": {
                     "Type": "Task",
                     "Resource": lambdaIsSnsFunctionAttrArn,
                     "Parameters": {
                         "procType": "postSns"
                     },
+                    "ResultPath": "$.wait",
+                    "Next": "SetNextStepToCheckSns"
+                },
+                "SetNextStepToCheckSns": {
+                    "Type": "Pass",
+                    "Parameters": {
+                        "waitSeconds.$": "$floor($random() * 10 + 5)",
+                        "nextStep": "RunCheckSns"
+                    },
+                    "ResultPath": "$.wait",
+                    "Next": "WaitState"
+                },
+                "RunCheckSns": {
+                    "Type": "Task",
+                    "Resource": lambdaIsSnsFunctionAttrArn,
+                    "Parameters": {
+                        "procType": "checkSns"
+                    },
+                    "End": true
+                },
+                "Fallback": {
+                    "Type": "Pass",
                     "End": true
                 }
             }

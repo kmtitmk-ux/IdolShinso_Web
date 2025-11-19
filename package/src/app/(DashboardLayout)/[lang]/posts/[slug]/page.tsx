@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
+import { Box, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
 import { cookiesClient } from "@/utils/amplifyServerUtils";
@@ -8,6 +8,7 @@ import outputs from '@/amplify_outputs.json';
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
+import { post } from "aws-amplify/api";
 // import from '@mui/material/Breadcrumbs';
 // import Link from '@mui/material/Link';
 const window = new JSDOM("").window;
@@ -61,14 +62,12 @@ export async function generateMetadata({ params }: PageProps) {
             description: description,
             url: `https://geinouwasa.com/posts/${slug}`,
             siteName: siteTitle,
-            images: [
-                {
-                    url: `https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`,
-                    width: 1200,
-                    height: 630,
-                    alt: title,
-                },
-            ],
+            images: [{
+                url: `https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`,
+                width: 1200,
+                height: 630,
+                alt: title,
+            }],
             locale,
             type: 'article',
         },
@@ -100,7 +99,7 @@ const SamplePage = async ({ params }: PageProps) => {
                 "postmeta.slug",
                 "postmeta.taxonomy",
                 "postsTranslations.lang",
-                "postsTranslations.rewrittenTitle"
+                "postsTranslations.rewrittenTitle",
             ]
         });
     const postsTranslations = postData[0].postsTranslations.filter((pm) => pm.lang === lang)[0];
@@ -140,8 +139,47 @@ const SamplePage = async ({ params }: PageProps) => {
             </Breadcrumbs>
         );
     };
-    const editData: any = [];
+    let posts: any = [];
     const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
+
+    for (const term of data.postmeta) {
+        const slugTaxonomy = `${term.slug}_${term.taxonomy}`;
+        const { data: postmetaData } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
+            { slugTaxonomy },
+            {
+                selectionSet: [
+                    "id",
+                    "slug",
+                    "name",
+                    "post.id",
+                    "post.slug",
+                    "post.title",
+                    "post.rewrittenTitle",
+                    "post.thumbnail",
+                    "post.content",
+                    "post.createdAt",
+                ]
+            }
+        );
+        const ids: string[] = [];
+        posts = postmetaData.map((v) => {
+            if (!v.post || ids.includes(v.post.id) || ids.length >= 8) return;
+            ids.push(v.post.id);
+            return {
+                id: v.post.id,
+                slug: v.post.slug,
+                title: v.post.title,
+                rewrittenTitle: v.post?.rewrittenTitle ?? "",
+                thumbnail: v.post?.thumbnail ?? "",
+                createdAt: v.post?.createdAt ?? "",
+                postmeta: [{
+                    id: v?.id ?? "",
+                    slug: v.slug,
+                    name: v.name
+                }]
+            };
+        }).filter(Boolean);
+    };
     return (
         <PageContainer
             title={title}
@@ -149,20 +187,15 @@ const SamplePage = async ({ params }: PageProps) => {
         >
             <BreadcrumbSetter title={title} category={data.postmeta[0]} />
             <DashboardCard title={title}>
-                {/* <List dense={false}>
-                    {
-                        tags.map((meta) => (
-                            <ListItem key={meta.id}>
-                                <Link
-                                    href={lang === "ja" ? `/tags/${meta.slug}` : `/${lang}/tags/${meta.slug}`}
-                                >
-                                    <ListItemText primary={meta.name} />
-                                </Link>
-
-                            </ListItem>
-                        ))
-                    }
-                </List> */}
+                <List dense={false} sx={{ display: "inline-flex", width: "auto" }}>
+                    {tags.map((meta) => (
+                        <ListItem key={meta.id} sx={{ whiteSpace: "nowrap", paddingRight: 0 }}>
+                            <Link href={lang === "ja" ? `/tags/${meta.slug}` : `/${lang}/tags/${meta.slug}`} >
+                                <ListItemText primary={`#${meta.name}`} />
+                            </Link>
+                        </ListItem>
+                    ))}
+                </List>
                 <Image
                     src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data.thumbnail as string}`}
                     alt={title}
@@ -171,11 +204,12 @@ const SamplePage = async ({ params }: PageProps) => {
                     style={{
                         width: '40%',
                         height: 'auto',
-                        objectFit: 'cover'
+                        objectFit: 'cover',
+                        display: 'block'
                     }}
                 />
                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content ?? "") }} />
-                <Grid container spacing={3} mt={2} >
+                <Grid container spacing={3} mt={2}>
                     {
                         data.comments && data.comments.map((comment) => (
                             <Grid key={comment.id} size={12}>
@@ -189,8 +223,20 @@ const SamplePage = async ({ params }: PageProps) => {
                         ))
                     }
                 </Grid>
+                <List dense={false} sx={{ display: "inline-flex", width: "auto" }}>
+                    {tags.map((meta) => (
+                        <ListItem key={meta.id} sx={{ whiteSpace: "nowrap", paddingRight: 0 }}>
+                            <Link href={lang === "ja" ? `/tags/${meta.slug}` : `/${lang}/tags/${meta.slug}`} >
+                                <ListItemText primary={`#${meta.name}`} />
+                            </Link>
+                        </ListItem>
+                    ))}
+                </List>
+                <Grid container spacing={3} mt={2} mb={3}>
+                    <Blog data={posts} lang={lang} />
+                </Grid>
+                <BreadcrumbSetter title={title} category={data.postmeta[0]} />
             </DashboardCard>
-            <Blog data={editData} lang={lang} />
         </PageContainer>
     );
 };

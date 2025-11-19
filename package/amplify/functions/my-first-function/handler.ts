@@ -155,11 +155,12 @@ export const handler: Handler = async (event: any) => {
             }).join('\n');
             await outPutS3(inputData, "title");
             break;
-        case "updateRewriteTitle":
+        case "updateRewriteTitle": {
             const titleData = await getObjetS3(`private/edit/title.jsonl`) as string;
             if (titleData) await updateRewriteTitle(titleData);
             break;
-        case "updateMainContent":
+        }
+        case "updateMainContent": {
             const { Contents = [] } = await s3Client.send(new ListObjectsV2Command({
                 Bucket: BUCKET_NAME_IS_01,
                 Prefix: "private/edit/"
@@ -167,12 +168,13 @@ export const handler: Handler = async (event: any) => {
             for (const v of ["main", "short"]) {
                 const articlesTxt = await getObjetS3(`private/edit/${v}_articles.yml`) as string;
                 type ArticlesList = { articles: Record<string, string>[]; };
-                const { articles } = yaml.load(articlesTxt) as ArticlesList;
+                const yamlResult = (yaml.load(articlesTxt) as ArticlesList) ?? { articles: [] };
+                const { articles } = yamlResult;
                 console.info("yaml data", articles);
                 for (const article of articles) {
                     try {
                         switch (v) {
-                            case "main":
+                            case "main": {
                                 const updateParam: UpdateCommandInput = {
                                     TableName: TABLE_NAME_IS_POSTS,
                                     Key: { id: article.id },
@@ -185,7 +187,8 @@ export const handler: Handler = async (event: any) => {
                                 console.info("Update docClient param", JSON.stringify(updateParam));
                                 await docClient.send(new UpdateCommand(updateParam));
                                 break;
-                            case "short":
+                            }
+                            case "short": {
                                 const date = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
                                 const putParam: PutCommandInput = {
                                     TableName: TABLE_NAME_IS_SNS,
@@ -201,11 +204,13 @@ export const handler: Handler = async (event: any) => {
                                         createdAt: date,
                                         updatedAt: date,
                                         __typename: "IsSns"
-                                    }
+                                    },
+                                    ConditionExpression: "attribute_not_exists(id)"
                                 };
                                 console.info("Put docClient param", putParam);
                                 await docClient.send(new PutCommand(putParam));
                                 break;
+                            }
                         }
                         const Key = Contents.filter(c => c.Key?.includes(`${v}Content_${article.id}`))[0]?.Key;
                         if (Key) {
@@ -217,7 +222,7 @@ export const handler: Handler = async (event: any) => {
                             await s3Client.send(new DeleteObjectCommand(deleteS3Param));
                         }
                     } catch (e: any) {
-                        console.error("Error processing article", article, e);
+                        console.error(article, e);
                         if ((e as any).errorType === "ValidationException" || (e as any).errorType === "ConditionalCheckFailedException") {
                             console.warn(`Item with id ${article.id} does not exist. Skipping update.`);
                             continue;
@@ -227,7 +232,8 @@ export const handler: Handler = async (event: any) => {
                 }
             }
             break;
-        case "createSitemap":
+        }
+        case "createSitemap": {
             const psotItem = await queryToDynamo(
                 TABLE_NAME_IS_POSTS,
                 "isPostsByStatusAndUpdatedAt",
@@ -251,6 +257,7 @@ export const handler: Handler = async (event: any) => {
             };
             await s3Client.send(new PutObjectCommand(params));
             break;
+        }
     }
     return {
         statusCode: 200,
