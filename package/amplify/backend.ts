@@ -60,7 +60,7 @@ const IsRandomSnsLambdaInvoker = new aws_stepfunctions.CfnStateMachine(externalS
                 "GenerateWaitAndNextStep": {
                     "Type": "Pass",
                     "Parameters": {
-                        "waitSeconds.$": "$floor($random() * 10 + 5)",
+                        "waitSeconds.$": "States.MathAdd(States.MathRandom(5, 30), 0)",
                         "nextStep": "RunPostSns"
                     },
                     "ResultPath": "$.wait",
@@ -99,7 +99,7 @@ const IsRandomSnsLambdaInvoker = new aws_stepfunctions.CfnStateMachine(externalS
                 "SetNextStepToCheckSns": {
                     "Type": "Pass",
                     "Parameters": {
-                        "waitSeconds.$": "$floor($random() * 10 + 5)",
+                        "waitSeconds.$": "States.MathAdd(States.MathRandom(5, 30), 0)",
                         "nextStep": "RunCheckSns"
                     },
                     "ResultPath": "$.wait",
