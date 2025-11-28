@@ -117,10 +117,11 @@ const schema = a.schema({
             snsPostId: a.string(),
             status: a.string().required(),
             updatedAt: a.datetime(),
-            post: a.belongsTo('IsPosts', 'postId')
+            post: a.belongsTo('IsPosts', 'postId'),
+            lang: a.string().required()
         })
         .secondaryIndexes((index) => [
-            index('status').sortKeys(['updatedAt'])
+            index('status').sortKeys(['updatedAt']),
         ])
         .authorization((allow) => [allow.guest()]),
 });

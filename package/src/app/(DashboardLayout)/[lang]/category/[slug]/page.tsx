@@ -70,12 +70,14 @@ const Category = async ({ params, taxonomy }: any) => {
         "post.createdAt",
         "id",
         "slug",
-        "name"
+        "name",
+        "createdAt"
     ] as const;
-    let listParams = {
+    const listParams = {
         limit: 8,
         selectionSet,
-        nextToken: null as string | null
+        nextToken: null as string | null,
+        sortDirection: "DESC" as const,
     };
     do {
         const { data, nextToken: newNextToken } = await cookiesClient.models.IsPostMeta
@@ -121,7 +123,8 @@ const Category = async ({ params, taxonomy }: any) => {
                 filter: { lang: { eq: lang } },
                 selectionSet: ["rewrittenTitle"]
             });
-            if (translationsData?.length) post.rewrittenTitle = translationsData[0]?.rewrittenTitle ?? "";
+            console.log("translationsData", lang, post, translationsData);
+            if (translationsData[0]) post.rewrittenTitle = translationsData[0]?.rewrittenTitle ?? "";
             editData.push({ ...post });
         }
     }

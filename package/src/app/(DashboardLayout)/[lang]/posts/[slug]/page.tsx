@@ -100,6 +100,7 @@ const SamplePage = async ({ params }: PageProps) => {
                 "postmeta.taxonomy",
                 "postsTranslations.lang",
                 "postsTranslations.rewrittenTitle",
+                "postsTranslations.content"
             ]
         });
     const postsTranslations = postData[0].postsTranslations.filter((pm) => pm.lang === lang)[0];
@@ -118,6 +119,7 @@ const SamplePage = async ({ params }: PageProps) => {
     console.info("fetch data postData:", postData);
     console.info("fetch data commentsData:", commentsData);
     const title = postsTranslations?.rewrittenTitle || data.rewrittenTitle || "";
+    const content = postsTranslations?.content || data.content || "";
     const BreadcrumbSetter = ({ title, category }: { title: string; category: { slug: string; name: string; }; }) => {
         return (
             <Breadcrumbs
@@ -141,7 +143,7 @@ const SamplePage = async ({ params }: PageProps) => {
     };
     let posts: any = [];
     const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
-
+    const ids: string[] = [];
     for (const term of data.postmeta) {
         const slugTaxonomy = `${term.slug}_${term.taxonomy}`;
         const { data: postmetaData } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
@@ -161,15 +163,22 @@ const SamplePage = async ({ params }: PageProps) => {
                 ]
             }
         );
-        const ids: string[] = [];
-        posts = postmetaData.map((v) => {
-            if (!v.post || ids.includes(v.post.id) || ids.length >= 8) return;
+        for (const v of postmetaData) {
+            if (!v.post || ids.includes(v.post.id) || ids.length >= 8) continue;
+            const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
+                postId: v.post.id
+            }, {
+                filter: { lang: { eq: lang } },
+                selectionSet: ["rewrittenTitle"]
+            });
+            if (!translationsData.length && lang !== "ja") continue;
             ids.push(v.post.id);
-            return {
+            const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
+            posts.push({
                 id: v.post.id,
                 slug: v.post.slug,
                 title: v.post.title,
-                rewrittenTitle: v.post?.rewrittenTitle ?? "",
+                rewrittenTitle: title,
                 thumbnail: v.post?.thumbnail ?? "",
                 createdAt: v.post?.createdAt ?? "",
                 postmeta: [{
@@ -177,8 +186,8 @@ const SamplePage = async ({ params }: PageProps) => {
                     slug: v.slug,
                     name: v.name
                 }]
-            };
-        }).filter(Boolean);
+            });
+        }
     };
     return (
         <PageContainer
@@ -208,7 +217,7 @@ const SamplePage = async ({ params }: PageProps) => {
                         display: 'block'
                     }}
                 />
-                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(data.content ?? "") }} />
+                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
                 <Grid container spacing={3} mt={2}>
                     {
                         data.comments && data.comments.map((comment) => (

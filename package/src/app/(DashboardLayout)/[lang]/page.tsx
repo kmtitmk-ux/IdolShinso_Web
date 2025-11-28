@@ -70,7 +70,7 @@ const Dashboard = async ({ params }: PageProps) => {
             postmeta: item.postmeta.filter(pm => pm.taxonomy === "category")
         };
     });
-    console.log("Dashboard editData:", editData);
+    console.info("Dashboard editData:", editData);
     return (
         <>
             <PageContainer title="Dashboard" description="this is Dashboard">

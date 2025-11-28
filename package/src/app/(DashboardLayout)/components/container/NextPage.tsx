@@ -31,10 +31,6 @@ const NextPage = ({
     const client = generateClient<Schema>();
 
     useEffect(() => {
-        if (nextToken) {
-            const buffer = Buffer.from(nextToken, 'base64');
-            console.log(buffer.toString('utf8'));
-        }
         if (!loader.current) return;
         const currentLoader = loader.current;
         const observer = new IntersectionObserver((entries) => {

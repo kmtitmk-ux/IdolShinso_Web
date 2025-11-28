@@ -134,7 +134,7 @@ type MainContPromptParts = {
 export const handler: Handler = async (event: any) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
     switch (event.procType) {
-        case "scrapingContent":
+        case "scrapingContent": {
             const outputResults: OutputResult[] = [];
             const url = 'https://hpupdate.info/';
             console.info("axios", url);
@@ -155,6 +155,7 @@ export const handler: Handler = async (event: any) => {
             }).join('\n');
             await outPutS3(inputData, "title");
             break;
+        }
         case "updateRewriteTitle": {
             const titleData = await getObjetS3(`private/edit/title.jsonl`) as string;
             if (titleData) await updateRewriteTitle(titleData);
@@ -166,16 +167,25 @@ export const handler: Handler = async (event: any) => {
                 Prefix: "private/edit/"
             }));
             for (const v of ["main", "short"]) {
+
+                // 日本語記事
                 const articlesTxt = await getObjetS3(`private/edit/${v}_articles.yml`) as string;
-                type ArticlesList = { articles: Record<string, string>[]; };
-                const yamlResult = (yaml.load(articlesTxt) as ArticlesList) ?? { articles: [] };
+                const yamlResult = (yaml.load(articlesTxt) as { articles: Record<string, string>[]; }) ?? { articles: [] };
                 const { articles } = yamlResult;
                 console.info("yaml data", articles);
+
+                // 英語記事
+                const articlesEnTxt = await getObjetS3(`private/edit/${v}_articles_en.yml`) as string;
+                const yamlResultEn = (yaml.load(articlesEnTxt) as { articles: Record<string, string>[]; }) ?? { articles: [] };
+                const { articles: articlesEn } = yamlResultEn;
+                console.info("yaml data", articlesEn);
+
                 for (const article of articles) {
+                    const articleEn = articlesEn.filter(item => item.id === article.id)[0];
                     try {
                         switch (v) {
                             case "main": {
-                                const updateParam: UpdateCommandInput = {
+                                const updateParamJa: UpdateCommandInput = {
                                     TableName: TABLE_NAME_IS_POSTS,
                                     Key: { id: article.id },
                                     UpdateExpression: "SET #content = :content",
@@ -184,13 +194,47 @@ export const handler: Handler = async (event: any) => {
                                     ReturnValues: "UPDATED_NEW",
                                     ConditionExpression: "attribute_exists(id)"
                                 };
-                                console.info("Update docClient param", JSON.stringify(updateParam));
-                                await docClient.send(new UpdateCommand(updateParam));
+                                console.info("Update docClient param", JSON.stringify(updateParamJa));
+                                await docClient.send(new UpdateCommand(updateParamJa));
+
+                                // 英語更新
+                                if (articleEn) {
+                                    const queryParam = {
+                                        TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                                        IndexName: "isPostsTranslationsByPostId",
+                                        KeyConditionExpression: "#postId = :postId",
+                                        ExpressionAttributeNames: {
+                                            "#postId": "postId",
+                                            "#lang": "lang"
+                                        },
+                                        ExpressionAttributeValues: {
+                                            ":postId": article.id,
+                                            ":lang": "en"
+                                        },
+                                        FilterExpression: "#lang = :lang",
+                                    };
+                                    console.info("QueryCommand param", JSON.stringify(queryParam));
+                                    const { Items } = await docClient.send(new QueryCommand(queryParam));
+                                    console.info("QueryCommand result", JSON.stringify(Items));
+                                    if (Items && Items.length > 0) {
+                                        const updateParamEn: UpdateCommandInput = {
+                                            TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                                            Key: { id: Items[0].id },
+                                            UpdateExpression: "SET #content = :content",
+                                            ExpressionAttributeNames: { "#content": "content" },
+                                            ExpressionAttributeValues: { ":content": articleEn.html },
+                                            ReturnValues: "UPDATED_NEW",
+                                            ConditionExpression: "attribute_exists(id)"
+                                        };
+                                        console.info("UpdateCommand param", updateParamEn);
+                                        await docClient.send(new UpdateCommand(updateParamEn));
+                                    }
+                                }
                                 break;
                             }
                             case "short": {
                                 const date = dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]');
-                                const putParam: PutCommandInput = {
+                                const putParamJa: PutCommandInput = {
                                     TableName: TABLE_NAME_IS_SNS,
                                     Item: {
                                         id: uuidv4(),
@@ -200,24 +244,38 @@ export const handler: Handler = async (event: any) => {
                                         engagementShare: 0,
                                         postId: article.id,
                                         platform: "",
+                                        lang: "ja",
                                         status: "scheduled",
                                         createdAt: date,
                                         updatedAt: date,
                                         __typename: "IsSns"
                                     },
-                                    ConditionExpression: "attribute_not_exists(id)"
                                 };
-                                console.info("Put docClient param", putParam);
-                                await docClient.send(new PutCommand(putParam));
+                                console.info("Put docClient param ja", putParamJa);
+                                await docClient.send(new PutCommand(putParamJa));
+
+                                // 英語更新
+                                if (articleEn) {
+                                    const putParamEn: PutCommandInput = {
+                                        TableName: TABLE_NAME_IS_SNS,
+                                        Item: {
+                                            ...putParamJa.Item,
+                                            id: uuidv4(),
+                                            contentText: articleEn.TEXT,
+                                            lang: "en",
+                                            createdAt: date,
+                                            updatedAt: date
+                                        }
+                                    };
+                                    console.info("Put docClient param en", putParamEn);
+                                    await docClient.send(new PutCommand(putParamEn));
+                                }
                                 break;
                             }
                         }
                         const Key = Contents.filter(c => c.Key?.includes(`${v}Content_${article.id}`))[0]?.Key;
                         if (Key) {
-                            const deleteS3Param = {
-                                Bucket: BUCKET_NAME_IS_01,
-                                Key
-                            };
+                            const deleteS3Param = { Bucket: BUCKET_NAME_IS_01, Key };
                             console.info("Delete s3Client param", deleteS3Param);
                             await s3Client.send(new DeleteObjectCommand(deleteS3Param));
                         }
@@ -230,6 +288,21 @@ export const handler: Handler = async (event: any) => {
                         throw e;
                     }
                 }
+
+                const putS3ParamJa = {
+                    Bucket: BUCKET_NAME_IS_01,
+                    Key: `private/edit/${v}_articles.yml`,
+                    Body: " "
+                };
+                console.info("Put s3Client param", putS3ParamJa);
+                await s3Client.send(new PutObjectCommand(putS3ParamJa));
+
+                const putS3ParamEn = {
+                    ...putS3ParamJa,
+                    Key: `private/edit/${v}_articles_en.yml`,
+                };
+                console.info("Put s3Client param", putS3ParamEn);
+                await s3Client.send(new PutObjectCommand(putS3ParamEn));
             }
             break;
         }
@@ -264,6 +337,12 @@ export const handler: Handler = async (event: any) => {
         body: ""
     };
 };
+
+
+async function updateMainContentTranslation(fileType: string) {
+    console.log(fileType);
+}
+
 
 async function generateSitemapXml(posts: { slug: string; lastModified: string; }[], baseURL: string) {
     // XMLドキュメントの作成とルート要素の設定
