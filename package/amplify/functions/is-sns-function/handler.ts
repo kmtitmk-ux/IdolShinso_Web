@@ -146,6 +146,7 @@ async function postSns() {
     );
     for (const lang of ["ja", "en"] as const) {
         const postItem = psotItems.filter(item => item.lang === lang)[0];
+        if (!postItem) continue;
         const clientV2 = client[lang].v2;
         const { data } = await clientV2.tweet(postItem.contentText);
         postItem.snsPostId = data.id;
