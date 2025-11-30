@@ -11,8 +11,6 @@ import { TwitterApi } from 'twitter-api-v2';
 import dayjs from "dayjs";
 import axios from "axios";
 import type { Handler } from 'aws-lambda';
-import { title } from "process";
-import { ReadWriteType } from "aws-cdk-lib/aws-cloudtrail";
 
 const TABLE_ID = process.env.TABLE_ID as string;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
@@ -22,16 +20,16 @@ const BEARER_TOKEN_EN = "AAAAAAAAAAAAAAAAAAAAAFF75gEAAAAA68JRXhHzEBgQVygK5%2FIE3
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const client = {
     ja: new TwitterApi({
-        appKey: 'nu0OQAkeqgLPb5nmfogfhw1di',
-        appSecret: 'wtQgkLsUTkBIBOhGX0q0KwiMZLFJWLglAUWx5XNDWHyNvV2tfs',
-        accessToken: '1981604542614794241-Ppor1GP9EBUX1JBI4qbdGoUlTUloKa',
-        accessSecret: 'c6c8vZBPQ4TvJD7f8GdfNZZOG4q2uc7qiXMv8SMXjEEbA',
+        appKey: 'C8GpCWkENvKBrJbanePsG3tqk',
+        appSecret: 'Q4CZWcQpYmpVFOWY2LGWCXbWPyeXWcjccn1Cw0mxiuFqesVesu',
+        accessToken: '1981604542614794241-QLzZHGtNmwRMP01wze6aDWyDzay3c1',
+        accessSecret: 'rPeTAfHGaFdA7SFVyjjMM40UYhy0jA9NSpuGOvZOz7m82',
     }),
     en: new TwitterApi({
-        appKey: 'majBCPbtKsBA7Kwqe7VybZIfi',
-        appSecret: 'o1w3tJxYXr2elLLZW7NvXe9Ra8i6oSyb2DL6wDf2SDIkLyMo1Z',
-        accessToken: '2823981007-kNRUpOXXA71PYD9NpxhvVtT7m39QGCcjqpybrrR',
-        accessSecret: 'TOCMyKMdv0fDpD94srCoM2WaP9gziP9CCKqWB8jrke9tq',
+        appKey: 'WfObgNR7WoE6j3izNQZlaLaE8',
+        appSecret: 'rYeiAHqzvOeYyWn6nUoTU2DwXBPsUNK4GLNH38FA1o15q51Z39',
+        accessToken: '2823981007-4kdmGbu0wzkQNwz3RyEzT6BkDEvewC3Fof0Dp7m',
+        accessSecret: '7jdL24n7Xrjnze1m4khApnXLipFQhbCMyUgEidjpu2ASk',
     })
 };
 
@@ -93,7 +91,6 @@ export const handler: Handler = async (event) => {
                         await updateToDynamo(updateParam);
                     }
                 }
-
                 break;
             }
             default:
@@ -147,6 +144,7 @@ async function postSns() {
     for (const lang of ["ja", "en"] as const) {
         const postItem = psotItems.filter(item => item.lang === lang)[0];
         if (!postItem) continue;
+        console.info(`Posting SNS item: ${postItem}`);
         const clientV2 = client[lang].v2;
         const { data } = await clientV2.tweet(postItem.contentText);
         postItem.snsPostId = data.id;
