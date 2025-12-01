@@ -16,7 +16,6 @@ const TABLE_ID = process.env.TABLE_ID as string;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
 const TABLE_NAME_IS_POSTS = `IsPosts-${TABLE_ID}`;
 const BEARER_TOKEN = "AAAAAAAAAAAAAAAAAAAAAID94wEAAAAA5IXCKb40XXHqf0m01kAFcQavlrk%3DCyDmmrA25EgzWoXjywasQue3clUwdOhJfw1xoCY07cVdPKBAfh";
-const BEARER_TOKEN_EN = "AAAAAAAAAAAAAAAAAAAAAFF75gEAAAAA68JRXhHzEBgQVygK5%2FIE3Z6GXYw%3DCZJtiRYnfsx4st7KzPVhhkpqiF68oJpyQk1SgFyRCuhJhe7PXJ";
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const client = {
     ja: new TwitterApi({
@@ -24,12 +23,6 @@ const client = {
         appSecret: 'Q4CZWcQpYmpVFOWY2LGWCXbWPyeXWcjccn1Cw0mxiuFqesVesu',
         accessToken: '1981604542614794241-QLzZHGtNmwRMP01wze6aDWyDzay3c1',
         accessSecret: 'rPeTAfHGaFdA7SFVyjjMM40UYhy0jA9NSpuGOvZOz7m82',
-    }),
-    en: new TwitterApi({
-        appKey: 'WfObgNR7WoE6j3izNQZlaLaE8',
-        appSecret: 'rYeiAHqzvOeYyWn6nUoTU2DwXBPsUNK4GLNH38FA1o15q51Z39',
-        accessToken: '2823981007-4kdmGbu0wzkQNwz3RyEzT6BkDEvewC3Fof0Dp7m',
-        accessSecret: '7jdL24n7Xrjnze1m4khApnXLipFQhbCMyUgEidjpu2ASk',
     })
 };
 
@@ -82,7 +75,7 @@ export const handler: Handler = async (event) => {
                         }));
                         console.info("GetCommand result", getResult);
                         const checkItem = checkItems.filter(item => item.snsPostId === snsPostId)[0];
-                        const lang: "ja" | "en" = checkItem.lang;
+                        const lang: "ja" = checkItem.lang;
                         const rwClient = client[lang].readWrite;
                         await rwClient.v2.reply(`${getResult?.rewrittenTitle}\n\nhttps://geinouwasa.com/posts/${getResult?.slug}`, snsPostId);
                         const updateParam = checkItems.filter(item => item.snsPostId === snsPostId)[0];
@@ -141,10 +134,11 @@ async function postSns() {
         { ":status": "scheduled", ":updatedAt": dayjs().subtract(2, "day").toISOString() },
         20
     );
-    for (const lang of ["ja", "en"] as const) {
+    console.info(`Found ${psotItems} items to post.`);
+    for (const lang of ["ja"] as const) {
         const postItem = psotItems.filter(item => item.lang === lang)[0];
-        if (!postItem) continue;
         console.info(`Posting SNS item: ${postItem}`);
+        if (!postItem) continue;
         const clientV2 = client[lang].v2;
         const { data } = await clientV2.tweet(postItem.contentText);
         postItem.snsPostId = data.id;
