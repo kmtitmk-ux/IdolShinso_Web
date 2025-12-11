@@ -260,10 +260,10 @@ isSnsFunctionRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: [
-            // 'dynamodb:BatchWriteItem',
             'dynamodb:GetItem',
-            'dynamodb:UpdateItem',
-            'dynamodb:Query'
+            'dynamodb:PutItem',
+            'dynamodb:Query',
+            'dynamodb:UpdateItem'
         ],
         resources: [
             `arn:aws:dynamodb:*:*:table/IsPosts*`,
