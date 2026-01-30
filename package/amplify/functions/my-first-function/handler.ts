@@ -490,8 +490,8 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
     await Promise.all(promises);
 
     // コメントの取得
-    const ths = $('#mainEntity .entry-title + div div.meta');
-    const tds = $('#mainEntity .entry-title + div .message');
+    const ths = $('#article-header + div div.meta');
+    const tds = $('#article-header + div .message');
     const pushItems: IS_COMMENTS_INPUT[] = [];
     const pushItemsTranslation = [];
     for (const [i, el] of Array.from(tds).entries()) {
