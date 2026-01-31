@@ -432,7 +432,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
     // タームの取得
     const terms = $('.meta-box span[itemprop="keywords"]');
     const promises = terms.map(async (i, el) => {
-        const taxonomy = $(el).attr("class")?.trim() as string;
+        const taxonomy = $(el).attr("class")?.trim().replace(/ items/g, "") as string;
         const names = $(el).find("a");
         for (const nameEl of names) {
             const name = $(nameEl).text()?.trim() as string;
