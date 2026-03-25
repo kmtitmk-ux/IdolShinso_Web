@@ -211,10 +211,11 @@ const SamplePage = async ({ params }: PageProps) => {
                     width={400}
                     height={250}
                     style={{
-                        width: '40%',
+                        width: '100%',      // 基本は100%（スマホ優先）
+                        maxWidth: '400px',  // PCで広がりすぎないよう最大値を固定（または40%など）
                         height: 'auto',
                         objectFit: 'cover',
-                        display: 'block'
+                        display: 'block',
                     }}
                 />
                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
@@ -224,6 +225,7 @@ const SamplePage = async ({ params }: PageProps) => {
                             <Grid key={comment.id} size={12}>
                                 <div style={{ fontWeight: "bold" }}>{comment.header ?? ""}</div>
                                 <div
+                                    id="single"
                                     dangerouslySetInnerHTML={{
                                         __html: DOMPurify.sanitize(comment.content ?? "")
                                     }}

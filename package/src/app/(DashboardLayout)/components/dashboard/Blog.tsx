@@ -29,7 +29,6 @@ const Blog = ({
     data: any[];
     lang: string;
 }) => {
-    console.log("Blog", data);
     return (
         <>
             {data.map((product: any, index: number) => {
