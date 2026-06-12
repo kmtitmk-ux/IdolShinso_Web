@@ -34,13 +34,8 @@ export default async function RootLayout({
                         }
                     } />
                     {/* End Google Tag Manager (noscript) */}
-                    <script
-                        id="adsense-script"
-                        async
-                        src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9862851994514309"
-                        strategy="afterInteractive"
-                        crossOrigin="anonymous"
-                    />
+                    <script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9862851994514309"
+                        crossorigin="anonymous"></script>
                     <ClientThemeProvider>
                         <ClientLayout>
                             {/* PageContent */}
