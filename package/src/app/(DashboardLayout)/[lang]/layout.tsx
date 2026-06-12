@@ -28,14 +28,20 @@ export default async function RootLayout({
                 </head>
                 <body>
                     {/* Google Tag Manager (noscript) */}
-                    <Script id="gtm-noscript" strategy="afterInteractive">
-                        {`<iframe src="https://www.googletagmanager.com/ns.html?id=GTM-KG6DKBNT" height="0" width="0" style="display:none;visibility:hidden"></iframe>`}
-                    </Script>
+                    <noscript>
+                        <iframe
+                            src="https://www.googletagmanager.com/ns.html?id=GTM-KG6DKBNT"
+                            height="0"
+                            width="0"
+                            style={{ display: 'none', visibility: 'hidden' }}
+                        />
+                    </noscript>
                     {/* Google AdSense */}
-                    <Script
+                    <script
+                        async
                         src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=ca-pub-9862851994514309"
                         crossOrigin="anonymous"
-                        strategy="afterInteractive" 
+                        dangerouslySetInnerHTML={{ __html: '' }}
                     />
                     <ClientThemeProvider>
                         <ClientLayout>
