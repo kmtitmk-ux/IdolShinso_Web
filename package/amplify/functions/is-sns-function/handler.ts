@@ -183,7 +183,7 @@ async function postSns() {
         20
     );
     console.info(`Found ${postItems} items to post.`);
-    for (const platform of ["x", "threads"]) {
+    for (const platform of ["threads"]) {
         for (const lang of ["ja", "en"] as const) {
             const postItem = postItems.filter(item => item.lang === lang)[0];
             console.info(`Posting to ${platform} in ${lang} for item:`, postItem);
