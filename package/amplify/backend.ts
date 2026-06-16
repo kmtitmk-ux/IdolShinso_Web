@@ -151,7 +151,7 @@ backend.data.addEventBridgeDataSource("MyEventBridgeDataSourceForStepFunc", even
 new aws_events.CfnRule(externalStack, "StepFunctionTriggerRule", {
     eventBusName: eventBusForStepFunc.eventBusName,
     name: process.env.RULE_NAME_IS_02 ?? `triggerStepFunction-${APP_ID}-${BRANCH}`,
-    scheduleExpression: "cron(0 0,6 ? * * *)",
+    scheduleExpression: "cron(0 0,3,6,9,12 ? * * *)",
     state: BRANCH === "main" ? "ENABLED" : "DISABLED",
     targets: [
         {
