@@ -53,7 +53,7 @@ export const handler: Handler = async (event) => {
                     console.info("No items.");
                     break;
                 }
-                for (const platform of ["x","threads"]) {
+                for (const platform of ["x", "threads"]) {
                     for (const lang of ["ja", "en"] as const) {
                         const filteredItems = checkItems.filter(item => item.platform === platform && item.lang === lang);
                         if (filteredItems.length === 0) continue;
@@ -151,8 +151,11 @@ export const handler: Handler = async (event) => {
             default:
                 throw new Error(`Unknown event type: ${event.procType}`);
         }
-    } catch (error) {
+    } catch (error: any) {
         console.error(error);
+        if (error?.response?.data) {
+            console.info(JSON.stringify(error.response?.data, null, 2));
+        }
     }
     return {
         statusCode: 200,
