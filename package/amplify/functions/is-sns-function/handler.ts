@@ -127,12 +127,12 @@ export const handler: Handler = async (event) => {
                                         // URL の prefix を整理
                                         const langPrefix = lang === "ja" ? "" : `${lang}/`;
                                         const userId = await getUserId(lang);
-                                        await replyToThread(
-                                            userId,
-                                            item.snsPostId,
-                                            `${postText}\n\nhttps://geinouwasa.com/${langPrefix}posts/${getResult?.slug}`,
-                                            lang
-                                        );
+                                        // await replyToThread(
+                                        //     userId,
+                                        //     item.snsPostId,
+                                        //     `${postText}\n\nhttps://geinouwasa.com/${langPrefix}posts/${getResult?.slug}`,
+                                        //     lang
+                                        // );
                                         const updateItem = { ...item };
                                         updateItem.status = "replied";
                                         updateItem.updatedAt = dayjs().toISOString();
@@ -206,7 +206,7 @@ async function postSns() {
                         updateItem.id = uuidv4();
                         updateItem.platform = "threads";
                         const userId = await getUserId(lang);
-                        updateItem.snsPostId = await postToThreads(userId, postItem.contentText, lang);
+                        // updateItem.snsPostId = await postToThreads(userId, postItem.contentText, lang);
                         updateItem.status = "posted";
                         break;
                     }
