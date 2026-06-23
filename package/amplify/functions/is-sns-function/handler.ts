@@ -102,7 +102,7 @@ export const handler: Handler = async (event) => {
                                         return sum + value;
                                     }, 0);
                                     // エンゲージメントが一定数を超えたらリプライを投稿
-                                    if (engagementCount >= 1) {
+                                    if (engagementCount >= 3) {
                                         const postId = item.postId;
                                         const { Item: getResult } = await docClient.send(new GetCommand({
                                             TableName: TABLE_NAME_IS_POSTS,
@@ -182,7 +182,7 @@ async function postSns() {
         "isSnsByStatusAndUpdatedAt",
         "#status = :status AND #updatedAt >= :updatedAt",
         { "#status": "status", "#updatedAt": "updatedAt" },
-        { ":status": "scheduled", ":updatedAt": dayjs().subtract(2, "day").toISOString() },
+        { ":status": "scheduled", ":updatedAt": dayjs().subtract(4, "day").toISOString() },
         20
     );
     console.info(`Found ${postItems} items to post.`);

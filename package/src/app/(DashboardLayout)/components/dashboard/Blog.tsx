@@ -66,7 +66,7 @@ const Blog = ({
                                     <IconBasket size="16" />
                                 </Fab>
                             </Tooltip> */}
-                            <CardContent sx={{ p: 3, pt: 2 }}>
+                            <CardContent sx={{ p: 1, pt: 2 }}>
                                 <Typography component={Link} href={postLink} variant="h6">
                                     {product?.rewrittenTitle || product?.title}
                                 </Typography>

@@ -75,7 +75,7 @@ const Dashboard = async ({ params }: PageProps) => {
         <>
             <PageContainer title="Dashboard" description="this is Dashboard">
                 <Box>
-                    <Grid container spacing={3}>
+                    <Grid container spacing={1}>
                         <Blog data={editData} lang={lang} />
                         <NextPage token={nextToken ?? ""} queryType={""} pk="" lang={lang} />
                     </Grid>
