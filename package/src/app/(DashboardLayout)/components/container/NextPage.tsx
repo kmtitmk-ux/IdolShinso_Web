@@ -1,5 +1,6 @@
 "use client";
 import React, { useEffect, useState, useRef } from "react";
+
 import {
     Card,
     CardContent,
@@ -10,6 +11,8 @@ import {
     Container,
 } from "@mui/material";
 import { generateClient } from 'aws-amplify/data';
+import { getUrl } from 'aws-amplify/storage';
+
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import type { Schema } from '@/amplify/data/resource';
 const NextPage = ({
@@ -93,8 +96,6 @@ const NextPage = ({
                     } while (true);
                     const editData: any = [];
                     for (const v of categoryList) {
-
-                        // 翻訳データがあればそちらを優先
                         const postsTranslations = v.post.postsTranslations.filter((pm: any) => {
                             if (lang !== "ja") {
                                 return pm.lang === lang;
@@ -102,33 +103,21 @@ const NextPage = ({
                                 return false;
                             }
                         })[0];
-
-                        const post: {
-                            id: string;
-                            slug: string;
-                            title: string;
-                            rewrittenTitle?: string;
-                            thumbnail?: string;
-                            createdAt?: string;
-                            postmeta: {
-                                id: string;
-                                slug: string;
-                                name: string;
-                            }[];
-                        } = {
+                        let imageUrl = "";
+                        if (v.post?.thumbnail) {
+                            const { url } = await getUrl({ path: v.post.thumbnail });
+                            imageUrl = url.toString();
+                        }
+                        editData.push({
                             id: v.post.id,
                             slug: v.post.slug,
                             title: v.post.title,
                             rewrittenTitle: postsTranslations?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "",
                             thumbnail: v.post?.thumbnail ?? "",
+                            imageUrl,
                             createdAt: v.post?.createdAt ?? "",
-                            postmeta: [{
-                                id: v?.id ?? "",
-                                slug: v.slug,
-                                name: v.name
-                            }]
-                        };
-                        editData.push({ ...post });
+                            postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
+                        });
                     }
                     setItems((prev) => [...prev, ...editData]);
                     break;
@@ -154,7 +143,7 @@ const NextPage = ({
                             "postsTranslations.rewrittenTitle"
                         ],
                     });
-                    res.data = (res.data ?? []).map((item: any) => {
+                    res.data = await Promise.all((res.data ?? []).map(async (item: any) => {
                         const postsTranslations = (item?.postsTranslations ?? []).filter((pm: any) => {
                             if (lang !== "ja") {
                                 return pm.lang === lang;
@@ -162,18 +151,24 @@ const NextPage = ({
                                 return false;
                             }
                         })[0];
+                        let imageUrl = "";
+                        if (item.thumbnail) {
+                            const { url } = await getUrl({ path: item.thumbnail });
+                            imageUrl = url.toString();
+                        }
                         return {
                             id: item.id,
                             slug: item.slug,
                             title: item.title,
                             rewrittenTitle: postsTranslations?.rewrittenTitle ?? item?.rewrittenTitle,
                             thumbnail: item.thumbnail,
+                            imageUrl,
                             createdAt: item.createdAt,
                             postmeta: item.postmeta.filter((pm: any) => {
                                 return pm.taxonomy === "category";
                             })
                         };
-                    });
+                    }));
                     setItems((prev) => [...prev, ...(res?.data ?? [])]);
                     break;
             }

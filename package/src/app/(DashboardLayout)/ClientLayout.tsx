@@ -20,7 +20,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode; 
             <AppRouterCacheProvider>
                 <Box style={{
                     flexGrow: 1,
-                    padding: "24px",
+                    // padding: "24px",
                     minHeight: "100vh"
                 }}>
                     {/* ------------------------------------------- */}
@@ -56,6 +56,7 @@ export default function ClientLayout({ children }: { children: React.ReactNode; 
                         {/* PageContent */}
                         {/* ------------------------------------------- */}
                         <Container
+                            disableGutters
                             sx={{
                                 paddingTop: "20px",
                                 maxWidth: "1200px",

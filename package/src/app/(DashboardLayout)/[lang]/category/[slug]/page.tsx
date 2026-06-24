@@ -1,37 +1,10 @@
-import Link from "next/link";
-import { useParams } from "next/navigation";
-import {
-    CardContent,
-    Button,
-    Typography,
-    Rating,
-    Tooltip,
-    Fab,
-    Avatar,
-    Grid,
-    Box,
-    Pagination,
-    PaginationItem
-} from "@mui/material";
-import { cookiesClient } from "@/utils/amplifyServerUtils";
-
-// components
+import { Grid, Box } from "@mui/material";
+import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
+import { getUrl } from 'aws-amplify/storage/server';
+import { cookies } from 'next/headers';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
-import SalesOverview from '@/app/(DashboardLayout)/components/dashboard/SalesOverview';
-import YearlyBreakup from '@/app/(DashboardLayout)/components/dashboard/YearlyBreakup';
-import RecentTransactions from '@/app/(DashboardLayout)/components/dashboard/RecentTransactions';
-import ProductPerformance from '@/app/(DashboardLayout)/components/dashboard/ProductPerformance';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
-import MonthlyEarnings from '@/app/(DashboardLayout)/components/dashboard/MonthlyEarnings';
-import { downloadData } from 'aws-amplify/storage';
-import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
-import { Stack } from "@mui/system";
-import dayjs from 'dayjs';
-import Image from "next/image";
-import outputs from '@/amplify_outputs.json';
-import { generateClient } from 'aws-amplify/data';
-import type { Schema } from '@/amplify/data/resource';
 
 interface PageProps {
     params: Promise<{
@@ -40,15 +13,12 @@ interface PageProps {
     }>;
 }
 export async function generateMetadata({ params }: PageProps) {
-    const { slug, lang } = await params;
+    const { slug } = await params;
     const slugTaxonomy = `${decodeURIComponent(slug)}_category`;
     const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
         slugTaxonomy,
     }, {
-        selectionSet: [
-            "post.thumbnail",
-            "name"
-        ]
+        selectionSet: ["post.thumbnail", "name"]
     });
     return {
         title: `${data[0]?.name}の魅力を深層まで探る｜アイドル深層`,
@@ -57,7 +27,6 @@ export async function generateMetadata({ params }: PageProps) {
 }
 const Category = async ({ params, taxonomy }: any) => {
     const { slug, lang } = await params;
-    console.info("slug", decodeURIComponent(slug));
     const slugTaxonomy = `${decodeURIComponent(slug)}_${taxonomy ?? "category"}`;
     let nextToken: string | null = null;
     let listData: any = [];
@@ -88,45 +57,37 @@ const Category = async ({ params, taxonomy }: any) => {
         if (!newNextToken || listData.length >= listParams.limit) break;
     } while (true);
 
-    // 翻訳データ取得
     const editData: any = [];
     for (const v of listData) {
-        if (v.post) {
-            const post: {
-                id: string;
-                slug: string;
-                title: string;
-                rewrittenTitle?: string;
-                thumbnail?: string;
-                createdAt?: string;
-                postmeta: {
-                    id: string;
-                    slug: string;
-                    name: string;
-                }[];
-            } = {
-                id: v.post.id,
-                slug: v.post.slug,
-                title: v.post.title,
-                rewrittenTitle: v.post?.rewrittenTitle ?? "",
-                thumbnail: v.post?.thumbnail ?? "",
-                createdAt: v.post?.createdAt ?? "",
-                postmeta: [{
-                    id: v?.id ?? "",
-                    slug: v.slug,
-                    name: v.name
-                }]
-            };
-            const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-                postId: post?.id
-            }, {
-                filter: { lang: { eq: lang } },
-                selectionSet: ["rewrittenTitle"]
+        if (!v.post) continue;
+        const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
+            postId: v.post.id
+        }, {
+            filter: { lang: { eq: lang } },
+            selectionSet: ["rewrittenTitle"]
+        });
+        let imageUrl = "";
+        if (v.post.thumbnail) {
+            const { url } = await runWithAmplifyServerContext({
+                nextServerContext: { cookies },
+                operation: (contextSpec) => getUrl(contextSpec, {
+                    path: v.post.thumbnail,
+                    options: { expiresIn: 3600 }
+                })
             });
-            console.log("translationsData", lang, post, translationsData);
-            if (translationsData[0]) post.rewrittenTitle = translationsData[0]?.rewrittenTitle ?? "";
-            editData.push({ ...post });
+            imageUrl = url.toString();
+            console.log("imageUrl", imageUrl);
         }
+        editData.push({
+            id: v.post.id,
+            slug: v.post.slug,
+            title: v.post.title,
+            rewrittenTitle: translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "",
+            thumbnail: v.post?.thumbnail ?? "",
+            imageUrl,
+            createdAt: v.post?.createdAt ?? "",
+            postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
+        });
     }
     return (
         <>

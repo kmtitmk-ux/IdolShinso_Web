@@ -1,9 +1,10 @@
-import { Grid, Box, Pagination, PaginationItem, Typography } from '@mui/material';
+import { Grid, Box } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
-// components
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
-import { cookiesClient } from "@/utils/amplifyServerUtils";
+import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
+import { getUrl } from 'aws-amplify/storage/server';
+import { cookies } from 'next/headers';
 
 interface PageProps {
     params: Promise<{
@@ -52,7 +53,7 @@ const Dashboard = async ({ params }: PageProps) => {
         console.error(errors);
         return;
     }
-    const editData = data.map((item) => {
+    const editData = await Promise.all(data.map(async (item) => {
         const postsTranslations = item.postsTranslations.filter((pm) => {
             if (lang !== "ja") {
                 return pm.lang === lang;
@@ -60,17 +61,28 @@ const Dashboard = async ({ params }: PageProps) => {
                 return false;
             }
         })[0];
+        let imageUrl = "";
+        if (item.thumbnail) {
+            const { url } = await runWithAmplifyServerContext({
+                nextServerContext: { cookies },
+                operation: (contextSpec) => getUrl(contextSpec, {
+                    path: item.thumbnail!,
+                    options: { expiresIn: 3600 }
+                })
+            });
+            imageUrl = url.toString();
+        }
         return {
             id: item.id,
             slug: item.slug,
             title: item.title,
             rewrittenTitle: postsTranslations?.rewrittenTitle || item?.rewrittenTitle,
             thumbnail: item.thumbnail,
+            imageUrl,
             createdAt: item.createdAt,
             postmeta: item.postmeta.filter(pm => pm.taxonomy === "category")
         };
-    });
-    console.info("Dashboard editData:", editData);
+    }));
     return (
         <>
             <PageContainer title="Dashboard" description="this is Dashboard">

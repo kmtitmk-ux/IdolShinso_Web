@@ -2,7 +2,9 @@ import Link from "next/link";
 import { Box, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
-import { cookiesClient } from "@/utils/amplifyServerUtils";
+import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
+import { getUrl } from 'aws-amplify/storage/server';
+import { cookies } from 'next/headers';
 import Image from "next/image";
 import outputs from '@/amplify_outputs.json';
 import createDOMPurify from "dompurify";
@@ -120,6 +122,17 @@ const SamplePage = async ({ params }: PageProps) => {
     console.info("fetch data commentsData:", commentsData);
     const title = postsTranslations?.rewrittenTitle || data.rewrittenTitle || "";
     const content = postsTranslations?.content || data.content || "";
+    let thumbnailUrl = "";
+    if (data.thumbnail) {
+        const { url } = await runWithAmplifyServerContext({
+            nextServerContext: { cookies },
+            operation: (contextSpec) => getUrl(contextSpec, {
+                path: data.thumbnail as string,
+                options: { expiresIn: 3600 }
+            })
+        });
+        thumbnailUrl = url.toString();
+    }
     const BreadcrumbSetter = ({ title, category }: { title: string; category: { slug: string; name: string; }; }) => {
         return (
             <Breadcrumbs
@@ -174,12 +187,24 @@ const SamplePage = async ({ params }: PageProps) => {
             if (!translationsData.length && lang !== "ja") continue;
             ids.push(v.post.id);
             const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
+            let imageUrl = "";
+            if (v.post?.thumbnail) {
+                const { url } = await runWithAmplifyServerContext({
+                    nextServerContext: { cookies },
+                    operation: (contextSpec) => getUrl(contextSpec, {
+                        path: v.post!.thumbnail as string,
+                        options: { expiresIn: 3600 }
+                    })
+                });
+                imageUrl = url.toString();
+            }
             posts.push({
                 id: v.post.id,
                 slug: v.post.slug,
                 title: v.post.title,
                 rewrittenTitle: title,
                 thumbnail: v.post?.thumbnail ?? "",
+                imageUrl,
                 createdAt: v.post?.createdAt ?? "",
                 postmeta: [{
                     id: v?.id ?? "",
@@ -205,19 +230,19 @@ const SamplePage = async ({ params }: PageProps) => {
                         </ListItem>
                     ))}
                 </List>
-                <Image
-                    src={`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${data.thumbnail as string}`}
+                {thumbnailUrl && <Image
+                    src={thumbnailUrl}
                     alt={title}
                     width={400}
                     height={250}
                     style={{
-                        width: '100%',      // 基本は100%（スマホ優先）
-                        maxWidth: '400px',  // PCで広がりすぎないよう最大値を固定（または40%など）
+                        width: '100%',
+                        maxWidth: '400px',
                         height: 'auto',
                         objectFit: 'cover',
                         display: 'block',
                     }}
-                />
+                />}
                 <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
                 <Grid container spacing={3} mt={2}>
                     {
