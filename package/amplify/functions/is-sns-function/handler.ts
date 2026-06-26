@@ -101,6 +101,7 @@ export const handler: Handler = async (event) => {
                                         const value = metric?.values?.[0]?.value ?? 0;
                                         return sum + value;
                                     }, 0);
+                                    console.info({ engagementCount });
                                     // エンゲージメントが一定数を超えたらリプライを投稿
                                     if (engagementCount >= 3) {
                                         const postId = item.postId;
