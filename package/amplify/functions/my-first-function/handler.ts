@@ -78,13 +78,14 @@ ID:
 {id}
 
 要件:
-- 文字数：日本語で**1500〜2200文字**。この範囲を目安に、だいたい2000文字程度に整えてください。
+- 文字数：日本語で**1500〜2200文字**。この範囲を目安に整えてください。
 - 構成：導入（リード）、本文（h2/h3相当の見出しを複数使用）含める。
 - トーン：読者にとってわかりやすく、親しみやすい口調（フレンドリーかつ信頼感のある文体）。
 - 見た目：適度に<h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>等を使うこと。
 - SEO：与えられたカテゴリー、タグを自然に本文へ散りばめる。不自然なキーワード詰め込みは禁止。
 - 出力形式：純粋なHTML断片。CSSや外部スクリプトは含めない。
 - 記事内のheader, footerは不要、純粋な記事のみのとする。
+- テンポよく読めるよう、短い文章を心がけてください。
 
 出力形式:
 - ID : [ID]
@@ -493,7 +494,6 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
     const ths = $('#article-header + div div.meta');
     const tds = $('#article-header + div .message');
     const pushItems: IS_COMMENTS_INPUT[] = [];
-    const pushItemsTranslation = [];
     for (const [i, el] of Array.from(tds).entries()) {
         let ogImageRes = { Key: "", id: "" };
         const commentDateText = $(ths[i]).text()?.trim().match(/\d{4}\/\d{2}\/\d{2}(?:\(.{1}\))? \d{2}:\d{2}:\d{2}\.\d{2}/) ?? [];
@@ -519,7 +519,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
             const imgSrc = $(el).find('img').attr('src') as string;
             if (imgSrc) {
                 const imageRes = await getImage(imgSrc, createdAt);
-                content = content.replace(imgSrc, `https://${BUCKET_NAME_IS_01}.s3.amazonaws.com/${imageRes.Key}`);
+                content = content.replace(new RegExp(imgSrc, 'g'), `https://${BUCKET_NAME_IS_01}.s3.amazonaws.com/${imageRes.Key}`);
             }
         }
         if (!content?.includes("スポンサーリンク")) {
@@ -532,19 +532,6 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                 updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
                 __typename: "IsComments"
             } as IS_COMMENTS_INPUT);
-            // for (const lang of ["en", "zh-TW"]) {
-            //     const { TranslatedText } = await test(content as string, 'ja', lang);
-            //     pushItemsTranslation.push({
-            //         id: uuidv4(),
-            //         postId,
-            //         content: TranslatedText,
-            //         header,
-            //         lang,
-            //         createdAt,
-            //         updatedAt: dayjs().format('YYYY-MM-DDTHH:mm:ss.SSS[Z]'),
-            //         __typename: "IsCommentsTranslations"
-            //     } as IS_COMMENTS_TRANSLATIONS_INPUT);
-            // }
             // メインコンテンツのプロンプトパーツに追加
             mainContPromptParts.comments.push(promptContent as string);
         }
@@ -571,19 +558,24 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
     const { id, title, category, tags, comments } = mainContPromptParts;
     console.info("createdMainContentPrompt IN:", JSON.stringify(mainContPromptParts));
     if (!title || !category || !tags.length || !comments.length) return;
+    const limitedComments = comments
+        .filter(comment => !/https?:\/\//i.test(comment))
+        .slice(0, 30);
+
     // メインコンテンツ
     const mainContentData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
         .replace("{category}", category)
         .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
-        .replace("{comments}", `${comments.map(item => `- ${item}`).join("\n")}`);
+        .replace("{comments}", `${limitedComments.map(item => `- ${item}`).join("\n")}`);
     await outPutS3(mainContentData, `mainContent_${mainContPromptParts.id}`);
+    
     // ショートコンテンツ
     const shortContentData = (`${SHORT_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
         .replace("{category}", category)
         .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
-        .replace("{comments}", `${comments.map(item => `- ${item}`).join("\n")}`);
+        .replace("{comments}", `${limitedComments.map(item => `- ${item}`).join("\n")}`);
     await outPutS3(shortContentData, `shortContent_${mainContPromptParts.id}`);
 }
 

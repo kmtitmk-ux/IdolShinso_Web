@@ -4,9 +4,8 @@ import { Amplify } from 'aws-amplify';
 import outputs from '@/amplify_outputs.json';
 Amplify.configure(outputs, { ssr: true });
 
-/**
- * /sitemap へのGETリクエストを処理し、S3から取得したsitemap.xmlをXML形式で返します。
- */
+export const revalidate = 3600; // 1時間サーバーキャッシュ
+
 export async function GET() {
     try {
         const { body } = await downloadData({ path: "public/sitemap.xml" }).result;
@@ -15,7 +14,7 @@ export async function GET() {
             status: 200,
             headers: {
                 'Content-Type': 'application/xml',
-                'Cache-Control': 'public, max-age=3600, must-revalidate',
+                'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
             },
         });
     } catch (error) {

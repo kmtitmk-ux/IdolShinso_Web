@@ -54,7 +54,7 @@ export const handler: Handler = async (event) => {
                     break;
                 }
                 for (const platform of ["x", "threads"]) {
-                    for (const lang of ["ja", "en"] as const) {
+                    for (const lang of ["ja"] as const) {
                         const filteredItems = checkItems.filter(item => item.platform === platform && item.lang === lang);
                         if (filteredItems.length === 0) continue;
                         console.info(`Found ${filteredItems.length} items for ${platform} in ${lang}.`);
@@ -97,34 +97,41 @@ export const handler: Handler = async (event) => {
                                 for (const item of filteredItems) {
                                     const insights = await getPostInsights(item.snsPostId, lang);
                                     const metrics = insights.data ?? [];
-                                    const engagementCount = metrics.reduce((sum: number, metric: any) => {
-                                        const value = metric?.values?.[0]?.value ?? 0;
-                                        return sum + value;
-                                    }, 0);
-                                    console.info({ engagementCount });
-                                    // エンゲージメントが一定数を超えたらリプライを投稿
-                                    if (engagementCount >= 3) {
+                                    const engagementCount = metrics
+                                        .filter((metric: any) =>
+                                            ['likes', 'replies', 'reposts', 'quotes'].includes(metric.name)
+                                        )
+                                        .reduce((sum: number, metric: any) => {
+                                            return sum + (metric?.values?.[0]?.value ?? 0);
+                                        }, 0);
+                                    const views = metrics.find(
+                                        (metric: any) => metric.name === "views"
+                                    )?.values?.[0]?.value ?? 0;
+                                    const engagementRate = views > 0 ? engagementCount / views : 0;
+                                    console.info({ engagementCount, views, engagementRate });
+                                    if (views >= 50 && engagementRate >= 0.01) {
                                         const postId = item.postId;
                                         const { Item: getResult } = await docClient.send(new GetCommand({
                                             TableName: TABLE_NAME_IS_POSTS,
                                             Key: { id: postId }
                                         }));
                                         console.info("GetCommand result", getResult);
-                                        const translationItems = await queryToDynamo(
-                                            TABLE_NAME_IS_POSTS_TRANSLATIONS,
-                                            "isPostsTranslationsByPostId",
-                                            "#postId = :postId",
-                                            { "#postId": "postId" },
-                                            { ":postId": postId },
-                                            1
-                                        );
+
                                         // postText をわかりやすく決定
                                         let postText: string;
-                                        if (lang === "ja") {
-                                            postText = getResult?.rewrittenTitle;
-                                        } else {
-                                            postText = translationItems[0]?.rewrittenTitle ?? getResult?.rewrittenTitle;
-                                        }
+                                        // if (lang === "ja") {
+                                        postText = getResult?.rewrittenTitle;
+                                        // } else {
+                                        //     const translationItems = await queryToDynamo(
+                                        //         TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                                        //         "isPostsTranslationsByPostId",
+                                        //         "#postId = :postId",
+                                        //         { "#postId": "postId" },
+                                        //         { ":postId": postId },
+                                        //         1
+                                        //     );
+                                        //     postText = translationItems[0]?.rewrittenTitle ?? getResult?.rewrittenTitle;
+                                        // }
                                         // URL の prefix を整理
                                         const langPrefix = lang === "ja" ? "" : `${lang}/`;
                                         const userId = await getUserId(lang);
@@ -188,7 +195,7 @@ async function postSns() {
     );
     console.info(`Found ${postItems} items to post.`);
     for (const platform of ["x", "threads"]) {
-        for (const lang of ["ja", "en"] as const) {
+        for (const lang of ["ja"] as const) {
             const postItem = postItems.filter(item => item.lang === lang)[0];
             console.info(`Posting to ${platform} in ${lang} for item:`, postItem);
             if (postItem) {
