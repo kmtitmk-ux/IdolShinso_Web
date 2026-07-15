@@ -43,7 +43,7 @@ const schema = a.schema({
             index('status').sortKeys(['createdAt']),
             index('status').sortKeys(['updatedAt'])
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsPostMeta: a
         .model({
             createdAt: a.datetime().required(),
@@ -57,7 +57,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('slugTaxonomy').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsTerms: a
         .model({
             ...IsTerms,
@@ -69,7 +69,7 @@ const schema = a.schema({
             index('slug'),
             index('taxonomy')
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsComments: a
         .model({
             ...IsComments,
@@ -77,7 +77,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsPostsTranslations: a
         .model({
             ...IsPosts,
@@ -88,7 +88,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId')
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsTermsTranslations: a
         .model({
             ...IsTerms,
@@ -99,7 +99,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('lang')
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsCommentsTranslations: a
         .model({
             ...IsComments,
@@ -108,7 +108,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
     IsSns: a
         .model({
             contentText: a.string(),
@@ -123,7 +123,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('status').sortKeys(['updatedAt']),
         ])
-        .authorization((allow) => [allow.publicApiKey()]),
+        .authorization((allow) => [allow.guest()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
@@ -131,7 +131,7 @@ export type Schema = ClientSchema<typeof schema>;
 export const data = defineData({
     schema,
     authorizationModes: {
-        defaultAuthorizationMode: 'apiKey',
+        defaultAuthorizationMode: 'identityPool',
     },
 });
 
