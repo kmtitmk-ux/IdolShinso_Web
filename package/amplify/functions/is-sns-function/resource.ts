@@ -1,4 +1,4 @@
-import { defineFunction } from "@aws-amplify/backend";
+import {  defineFunction, secret } from "@aws-amplify/backend";
 
 export const isSnsFunctionEnvConfig = {
     main: {
@@ -20,6 +20,12 @@ export const isSnsFunction = defineFunction({
     timeoutSeconds: 900,
     environment: {
         TABLE_ID: process.env.TABLE_ID ?? selectedConfig.TABLE_ID,
-        BUCKET_NAME_IS_01: process.env.BUCKET_NAME_IS_01 ?? selectedConfig.BUCKET_NAME_IS_01
+        BUCKET_NAME_IS_01: process.env.BUCKET_NAME_IS_01 ?? selectedConfig.BUCKET_NAME_IS_01,
+        THREADS_ACCESS_TOKENS: secret("THREADS_ACCESS_TOKENS"),
+        X_API_KEY: secret("X_API_KEY"),
+        X_API_KEY_SECRET: secret("X_API_KEY_SECRET"),
+        X_ACCESS_TOKEN: secret("X_ACCESS_TOKEN"),
+        X_ACCESS_SECRET: secret("X_ACCESS_SECRET"),
+        X_BEARER_TOKEN: secret("X_BEARER_TOKEN")
     }
 });

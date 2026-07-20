@@ -1,6 +1,6 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
-import { data } from './data/resource';
+import { data, IsCreateFile } from './data/resource';
 import { myFirstFunction, myFirstFunctionEnvConfig } from './functions/my-first-function/resource';
 import { isSnsFunction } from './functions/is-sns-function/resource';
 import { storage } from './storage/resource';
@@ -10,6 +10,9 @@ import {
 } from "aws-cdk-lib/aws-iam";
 import { createIsRandomSnsWorkflow } from './workflows/is-random-sns/resource';
 import { createOrderStatusWorkflow } from './workflows/order-status/resource';
+import { createSnsStatsWorkflow } from './workflows/IsSnsStatsWorkflow/resource';
+import { createFileWorkflow } from './workflows/IsCreateFileWorkflow/resource';
+import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
@@ -19,20 +22,46 @@ export const backend = defineBackend({
     data,
     myFirstFunction,
     isSnsFunction,
+    IsCreateFile,
     storage
 });
 
-type Branch = "main" | "develop";
-const BRANCH: Branch = (process.env.AWS_BRANCH as Branch) || "develop";
 const externalStack = backend.createStack("MyExternalDataSources");
+const parentStackName = externalStack.nestedStackParent?.stackName ?? externalStack.stackName;
+const env = parentStackName.includes("main") ? "main"
+    : parentStackName.includes("develop") ? "develop"
+        : "sandbox";
+
+// DynamoDB
+const isPostsTbl = backend.data.resources.tables['IsPosts'];
+const isSnsTbl = backend.data.resources.tables['IsSns'];
+const IsPostMetaTbl = backend.data.resources.tables['IsPostMeta'];
+const IsTermsTbl = backend.data.resources.tables['IsTerms'];
+const IsCommentsTbl = backend.data.resources.tables['IsComments'];
+const IsPostsTranslationsTbl = backend.data.resources.tables['IsPostsTranslations'];
+
+// S3
+const isBucket01 = backend.storage.resources.bucket;
+
+// Lambda
 const lambdaMyFirstFunctionAttrArn = backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn;
 
+const IsSnsFunctionInstance = backend.isSnsFunction.resources.lambda as LambdaFunction;
+const IsCreateFileInstance = backend.IsCreateFile.resources.lambda as LambdaFunction;
+
+IsCreateFileInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
+IsCreateFileInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
+
+// is-random-sns
 const { eventBusForStepFunc } = createIsRandomSnsWorkflow(externalStack, backend.isSnsFunction.resources.lambda);
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSourceForStepFunc", eventBusForStepFunc);
 
+// order-status
 const { eventBus } = createOrderStatusWorkflow(externalStack, lambdaMyFirstFunctionAttrArn);
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
 
+createSnsStatsWorkflow(externalStack, { IsSnsFunctionInstance }, env);
+createFileWorkflow(externalStack, { IsCreateFileInstance }, env);
 
 /**
  * LambdaのIAMロールにポリシーをアタッチ
@@ -48,15 +77,18 @@ myFirstFunctionRole?.addToPrincipalPolicy(
             'dynamodb:UpdateItem'
         ],
         resources: [
-            `arn:aws:dynamodb:*:*:table/IsPosts*`,
-            `arn:aws:dynamodb:*:*:table/IsPostMeta*`,
-            `arn:aws:dynamodb:*:*:table/IsTerms*`,
-            `arn:aws:dynamodb:*:*:table/IsComments*`,
-            `arn:aws:dynamodb:*:*:table/IsSns*`,
+            isPostsTbl.tableArn,
+            `${isPostsTbl.tableArn}/index/*`,
+            IsPostMetaTbl.tableArn,
+            IsTermsTbl.tableArn,
+            `${IsTermsTbl.tableArn}/index/*`,
+            IsCommentsTbl.tableArn,
+            isSnsTbl.tableArn,
+            IsPostsTranslationsTbl.tableArn,
+            `${IsPostsTranslationsTbl.tableArn}/index/*`,
         ]
     })
 );
-const s3BucketName = process.env.BUCKET_NAME_IS_01 || myFirstFunctionEnvConfig[BRANCH]?.BUCKET_NAME_IS_01;
 myFirstFunctionRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
@@ -67,8 +99,8 @@ myFirstFunctionRole?.addToPrincipalPolicy(
             's3:ListBucket'
         ],
         resources: [
-            `arn:aws:s3:::${s3BucketName}`,
-            `arn:aws:s3:::${s3BucketName}/*`
+            `${isBucket01.bucketArn}`,
+            `${isBucket01.bucketArn}/*`
         ]
     })
 );
@@ -91,11 +123,32 @@ isSnsFunctionRole?.addToPrincipalPolicy(
             'dynamodb:UpdateItem'
         ],
         resources: [
-            `arn:aws:dynamodb:*:*:table/IsPosts*`,
-            // `arn:aws:dynamodb:*:*:table/IsPostMeta*`,
-            // `arn:aws:dynamodb:*:*:table/IsTerms*`,
-            // `arn:aws:dynamodb:*:*:table/IsComments*`,
-            `arn:aws:dynamodb:*:*:table/IsSns*`,
-        ]
+            isPostsTbl.tableArn,
+            `${isPostsTbl.tableArn}/index/*`,
+            isSnsTbl.tableArn,
+            `${isSnsTbl.tableArn}/index/*`
+        ],
+    })
+);
+
+const IsCreateFileRole = backend.IsCreateFile.resources.lambda.role;
+IsCreateFileRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+            'dynamodb:PutItem',
+            'dynamodb:Query',
+        ],
+        resources: [
+            isSnsTbl.tableArn,
+            `${isSnsTbl.tableArn}/index/*`
+        ],
+    })
+);
+IsCreateFileRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+        resources: [`${isBucket01.bucketArn}/*`],
     })
 );

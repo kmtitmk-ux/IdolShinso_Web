@@ -1,29 +1,25 @@
-const axios = require("axios");
-const ACCESS_TOKENS = {
-    ja: "THAARHMbSOBk9BYlplT0tfa3RxWkQ0b1JFdFh2U3VtTXFvb2dpdm96dmhyWUFORGdmU1VERjZAiUTNCM2k4QzgwZAFdyNlRPU3FlREtKU05MMVJMemVaUFVHVE8wTDF0SUdhbW5RS2dZAMnA5cDNSZAmNhUjVQVzdVMDZAkSTlQbjZAITXFLZAlRkY1J0aS05anNTa1UZD",
-    en: "THAARHMbSOBk9BYlpabUxJQkRlZAVZAFSnRLTDlodDVEVmd3MVRiWUNkeFEtSUtrV0ZATWTNJY0hzNmVYOEdObDFOcGUyLTRLN053d29abFZAGenJ2VFBPb3pCWkZAGMUtJcjFCMktSUGZA3MUJpNlNyLWtiWDFCek90alBMWUt2ZAXp1cTlHU1A2bEgyMlpmR0pialEZD"
-
-};
+import axios from "axios";
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
+const THREADS_ACCESS_TOKENS = process.env.THREADS_ACCESS_TOKENS;
 
 // ユーザーIDを取得
-export async function getUserId(lang: "ja" | "en") {
+export async function getUserId() {
     const res = await axios.get(`${GRAPH_BASE}/me`, {
-        params: { access_token: ACCESS_TOKENS[lang] }
+        params: { access_token: THREADS_ACCESS_TOKENS }
     });
     console.info('User ID:', res.data);
     return res.data.id;
 }
 
 // 投稿
-export async function postToThreads(userId: string, text: string, lang: "ja" | "en") {
+export async function postToThreads(userId: string, text: string) {
     // 下書き作成
     const draft = await axios.post(
         `${GRAPH_BASE}/${userId}/threads`,
         { text },
         {
             params: {
-                access_token: ACCESS_TOKENS[lang],
+                access_token: THREADS_ACCESS_TOKENS,
                 media_type: 'TEXT'
             }
         }
@@ -35,19 +31,19 @@ export async function postToThreads(userId: string, text: string, lang: "ja" | "
     const publish = await axios.post(
         `${GRAPH_BASE}/${userId}/threads_publish`,
         { creation_id: containerId },
-        { params: { access_token: ACCESS_TOKENS[lang] } }
+        { params: { access_token: THREADS_ACCESS_TOKENS } }
     );
     console.info('Published:', publish.data);
     return publish.data.id;
 }
 
 // リプライ投稿
-export async function replyToThread(
+export async function replyToThreads(
     userId: string,
     parentPostId: string,
     text: string,
-    lang: "ja" | "en"
 ) {
+    console.info("Replying to post:", { userId, parentPostId, text });
     // ① 下書き作成（reply_to_id を追加）
     const draft = await axios.post(
         `${GRAPH_BASE}/${userId}/threads`,
@@ -57,7 +53,7 @@ export async function replyToThread(
         },
         {
             params: {
-                access_token: ACCESS_TOKENS[lang],
+                access_token: THREADS_ACCESS_TOKENS,
                 media_type: "TEXT"
             }
         }
@@ -65,24 +61,24 @@ export async function replyToThread(
     console.info("Reply Draft:", draft.data);
     const containerId = draft.data.id;
     // ② 公開
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 2000));
     const publish = await axios.post(
         `${GRAPH_BASE}/${userId}/threads_publish`,
         { creation_id: containerId },
-        { params: { access_token: ACCESS_TOKENS[lang] } }
+        { params: { access_token: THREADS_ACCESS_TOKENS } }
     );
     console.info("Reply Published:", publish.data);
     return publish.data.id;
 }
 
 // 投稿のインサイト取得
-export async function getPostInsights(postId: string, lang: "ja" | "en") {
+export async function getPostInsights(postId: string) {
     console.info(`Getting insights for post ID: ${postId}`);
     const res = await axios.get(
         `${GRAPH_BASE}/${postId}/insights`,
         {
             params: {
-                access_token: ACCESS_TOKENS[lang],
+                access_token: THREADS_ACCESS_TOKENS,
                 metric: "views,likes,replies,reposts,quotes"
             }
         }

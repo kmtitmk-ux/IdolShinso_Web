@@ -43,7 +43,6 @@ const TABLE_NAME_IS_POSTMETA = `IsPostMeta-${TABLE_ID}`;
 const TABLE_NAME_IS_TERMS = `IsTerms-${TABLE_ID}`;
 const TABLE_NAME_IS_COMMENTS = `IsComments-${TABLE_ID}`;
 const TABLE_NAME_IS_POSTS_TRANSLATIONS = `IsPostsTranslations-${TABLE_ID}`;
-const TABLE_NAME_IS_COMMENTS_TRANSLATIONS = `IsCommentsTranslations-${TABLE_ID}`;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
 const MAX_BATCH_SIZE = 25;
 const TITLE_PROMPT = `以下のJSONL形式のデータには、各行に "title" キーを持つブログタイトルが含まれています。
@@ -240,14 +239,13 @@ export const handler: Handler = async (event: any) => {
                                     Item: {
                                         id: uuidv4(),
                                         contentText: article.TEXT,
-                                        engagementLike: 0,
-                                        engagementComment: 0,
-                                        engagementShare: 0,
+                                        createdAt: date,
+                                        engagementRate: 0,
+                                        lang: "ja",
                                         postId: article.id,
                                         platform: "",
-                                        lang: "ja",
+                                        snsPostId: "",
                                         status: "scheduled",
-                                        createdAt: date,
                                         updatedAt: date,
                                         __typename: "IsSns"
                                     },
@@ -539,8 +537,6 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
 
     // コメントの一括登録
     await batchWriteItems(TABLE_NAME_IS_COMMENTS, pushItems);
-    // コメントの一括登録
-    // await batchWriteItems(TABLE_NAME_IS_COMMENTS_TRANSLATIONS, pushItemsTranslation);
     // メインコンテンツのプロンプト作成
     await createdMainContentPrompt(mainContPromptParts);
 
@@ -560,7 +556,7 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
     if (!title || !category || !tags.length || !comments.length) return;
     const limitedComments = comments
         .filter(comment => !/https?:\/\//i.test(comment))
-        .slice(0, 30);
+        .slice(0, 20);
 
     // メインコンテンツ
     const mainContentData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)

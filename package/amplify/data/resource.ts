@@ -1,4 +1,4 @@
-import { type ClientSchema, a, defineData } from '@aws-amplify/backend';
+import { type ClientSchema, a, defineData, defineFunction, defineBackend } from '@aws-amplify/backend';
 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
@@ -6,6 +6,7 @@ adding a new "isDone" field as a boolean. The authorization rule below
 specifies that any unauthenticated user can "create", "read", "update", 
 and "delete" any "Todo" records.
 =========================================================================*/
+
 
 const IsPosts = {
     rewrittenTitle: a.string(),
@@ -118,21 +119,31 @@ const schema = a.schema({
             status: a.string().required(),
             updatedAt: a.datetime(),
             post: a.belongsTo('IsPosts', 'postId'),
-            lang: a.string().required()
+            lang: a.string().required(),
+            engagementRate: a.float(),
+            crossPosted: a.boolean()
         })
         .secondaryIndexes((index) => [
             index('status').sortKeys(['updatedAt']),
+            index('platform').sortKeys(['updatedAt']),
         ])
         .authorization((allow) => [allow.guest()]),
 });
 
 export type Schema = ClientSchema<typeof schema>;
 
+
 export const data = defineData({
     schema,
     authorizationModes: {
         defaultAuthorizationMode: 'identityPool',
     },
+});
+
+export const IsCreateFile = defineFunction({
+    name: "IsCreateFile",
+    entry: "../functions/IsCreateFile/handler.ts",
+    timeoutSeconds: 30
 });
 
 /*== STEP 2 ===============================================================
