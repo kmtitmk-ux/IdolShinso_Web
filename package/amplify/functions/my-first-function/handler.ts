@@ -243,7 +243,7 @@ export const handler: Handler = async (event: any) => {
                                         engagementRate: 0,
                                         lang: "ja",
                                         postId: article.id,
-                                        platform: "",
+                                        platform: "threads",
                                         snsPostId: "",
                                         status: "scheduled",
                                         updatedAt: date,
