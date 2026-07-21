@@ -27,7 +27,7 @@ export async function postToThreads(userId: string, text: string) {
     console.info('Draft:', draft.data);
     const containerId = draft.data.id;
     // 公開
-    await new Promise(r => setTimeout(r, 200));
+    await new Promise(r => setTimeout(r, 2000));
     const publish = await axios.post(
         `${GRAPH_BASE}/${userId}/threads_publish`,
         { creation_id: containerId },

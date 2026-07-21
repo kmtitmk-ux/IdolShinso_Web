@@ -14,12 +14,17 @@ import { v4 as uuidv4 } from 'uuid';
 import * as threads from './threads';
 import * as x from './x';
 import type { Handler } from 'aws-lambda';
+import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+
+type ThreadsMetric = {
+    name: string;
+    values: { value: number; }[];
+};
 
 const TABLE_ID = process.env.TABLE_ID as string;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
 const TABLE_NAME_IS_POSTS = `IsPosts-${TABLE_ID}`;
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
-
 
 export const handler: Handler = async (event) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
@@ -173,14 +178,14 @@ export const handler: Handler = async (event) => {
                         const insights = await threads.getPostInsights(item.snsPostId);
                         const metrics = insights.data ?? [];
                         const engagementCount = metrics
-                            .filter((metric: any) =>
+                            .filter((metric: ThreadsMetric) =>
                                 ['likes', 'reposts'].includes(metric.name)
                             )
-                            .reduce((sum: number, metric: any) => {
+                            .reduce((sum: number, metric: ThreadsMetric) => {
                                 return sum + (metric?.values?.[0]?.value ?? 0);
                             }, 0);
                         const views = metrics.find(
-                            (metric: any) => metric.name === "views"
+                            (metric: ThreadsMetric) => metric.name === "views"
                         )?.values?.[0]?.value ?? 0;
                         const engagementRate = views > 0 ? engagementCount / views : 0;
                         const updateParam: UpdateCommandInput = {
@@ -204,7 +209,13 @@ export const handler: Handler = async (event) => {
                             newItem.engagementRate = 0;
                             newItem.status = "scheduled";
                             newItem.updatedAt = dayjs().toISOString();
-                            await putToDynamo(newItem);
+                            const putParam: PutCommandInput = {
+                                TableName: TABLE_NAME_IS_SNS,
+                                Item: newItem
+                            };
+                            console.info("PutCommand param", putParam);
+                            const putResult = await docClient.send(new PutCommand(putParam));
+                            console.info("PutCommand result", putResult);
                             const crossPostedUpdateParam: UpdateCommandInput = {
                                 TableName: TABLE_NAME_IS_SNS,
                                 Key: { id: item.id },
@@ -385,26 +396,14 @@ export const handler: Handler = async (event) => {
 };
 
 
-// SNS投稿のステータスを更新
-async function putToDynamo(updateItem: any) {
-    const param: PutCommandInput = {
-        TableName: TABLE_NAME_IS_SNS,
-        Item: updateItem
-    };
-    console.info("PutCommand param", param);
-    const putResult = await docClient.send(new PutCommand(param));
-    console.info("PutCommand result", putResult);
-}
-
-
 // 
 async function queryToDynamo(
     TableName: string,
     IndexName: string | undefined,
     KeyConditionExpression: string,
     FilterExpression: string | undefined,
-    ExpressionAttributeNames: Record<string, any>,
-    ExpressionAttributeValues: Record<string, any>,
+    ExpressionAttributeNames: Record<string, string>,
+    ExpressionAttributeValues: Record<string, NativeAttributeValue>,
     Limit: number
 ) {
     console.info("queryToDynamo param", { TableName, IndexName, KeyConditionExpression, FilterExpression, ExpressionAttributeNames, ExpressionAttributeValues });
