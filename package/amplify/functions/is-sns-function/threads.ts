@@ -1,11 +1,11 @@
 import axios from "axios";
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
-const THREADS_ACCESS_TOKENS = process.env.THREADS_ACCESS_TOKENS;
+const THREADS_ACCESS_TOKEN = process.env.THREADS_ACCESS_TOKEN;
 
 // ユーザーIDを取得
 export async function getUserId() {
     const res = await axios.get(`${GRAPH_BASE}/me`, {
-        params: { access_token: THREADS_ACCESS_TOKENS }
+        params: { access_token: THREADS_ACCESS_TOKEN }
     });
     console.info('User ID:', res.data);
     return res.data.id;
@@ -19,7 +19,7 @@ export async function postToThreads(userId: string, text: string) {
         { text },
         {
             params: {
-                access_token: THREADS_ACCESS_TOKENS,
+                access_token: THREADS_ACCESS_TOKEN,
                 media_type: 'TEXT'
             }
         }
@@ -31,7 +31,7 @@ export async function postToThreads(userId: string, text: string) {
     const publish = await axios.post(
         `${GRAPH_BASE}/${userId}/threads_publish`,
         { creation_id: containerId },
-        { params: { access_token: THREADS_ACCESS_TOKENS } }
+        { params: { access_token: THREADS_ACCESS_TOKEN } }
     );
     console.info('Published:', publish.data);
     return publish.data.id;
@@ -53,7 +53,7 @@ export async function replyToThreads(
         },
         {
             params: {
-                access_token: THREADS_ACCESS_TOKENS,
+                access_token: THREADS_ACCESS_TOKEN,
                 media_type: "TEXT"
             }
         }
@@ -65,7 +65,7 @@ export async function replyToThreads(
     const publish = await axios.post(
         `${GRAPH_BASE}/${userId}/threads_publish`,
         { creation_id: containerId },
-        { params: { access_token: THREADS_ACCESS_TOKENS } }
+        { params: { access_token: THREADS_ACCESS_TOKEN } }
     );
     console.info("Reply Published:", publish.data);
     return publish.data.id;
@@ -78,7 +78,7 @@ export async function getPostInsights(postId: string) {
         `${GRAPH_BASE}/${postId}/insights`,
         {
             params: {
-                access_token: THREADS_ACCESS_TOKENS,
+                access_token: THREADS_ACCESS_TOKEN,
                 metric: "views,likes,replies,reposts,quotes"
             }
         }

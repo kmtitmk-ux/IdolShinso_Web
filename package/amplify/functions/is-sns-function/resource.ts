@@ -21,7 +21,7 @@ export const isSnsFunction = defineFunction({
     environment: {
         TABLE_ID: process.env.TABLE_ID ?? selectedConfig.TABLE_ID,
         BUCKET_NAME_IS_01: process.env.BUCKET_NAME_IS_01 ?? selectedConfig.BUCKET_NAME_IS_01,
-        THREADS_ACCESS_TOKENS: secret("THREADS_ACCESS_TOKENS"),
+        THREADS_ACCESS_TOKEN: secret("THREADS_ACCESS_TOKEN"),
         X_API_KEY: secret("X_API_KEY"),
         X_API_KEY_SECRET: secret("X_API_KEY_SECRET"),
         X_ACCESS_TOKEN: secret("X_ACCESS_TOKEN"),
