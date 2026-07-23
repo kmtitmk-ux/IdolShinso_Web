@@ -3,8 +3,6 @@ import {
     BatchWriteCommand,
     PutCommand,
     PutCommandInput,
-    QueryCommand,
-    QueryCommandInput,
     UpdateCommand,
     UpdateCommandInput,
     DynamoDBDocumentClient
@@ -28,6 +26,7 @@ import customParseFormat from "dayjs/plugin/customParseFormat";
 import wanakana from "wanakana";
 import yaml from 'js-yaml';
 import { create } from 'xmlbuilder2';
+import * as dynamodbHelpers from '../shared/dynamodb-helpers';
 import type { Handler } from 'aws-lambda';
 
 dayjs.extend(customParseFormat);
@@ -199,23 +198,21 @@ export const handler: Handler = async (event: any) => {
 
                                 // 英語更新
                                 if (articleEn) {
-                                    const queryParam = {
-                                        TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
-                                        IndexName: "isPostsTranslationsByPostId",
-                                        KeyConditionExpression: "#postId = :postId",
-                                        ExpressionAttributeNames: {
+                                    const Items = await dynamodbHelpers.queryToDynamo(
+                                        TABLE_NAME_IS_POSTS_TRANSLATIONS,
+                                        "isPostsTranslationsByPostId",
+                                        "#postId = :postId",
+                                        "#lang = :lang",
+                                        {
                                             "#postId": "postId",
                                             "#lang": "lang"
                                         },
-                                        ExpressionAttributeValues: {
+                                        {
                                             ":postId": article.id,
                                             ":lang": "en"
                                         },
-                                        FilterExpression: "#lang = :lang",
-                                    };
-                                    console.info("QueryCommand param", JSON.stringify(queryParam));
-                                    const { Items } = await docClient.send(new QueryCommand(queryParam));
-                                    console.info("QueryCommand result", JSON.stringify(Items));
+                                        0
+                                    );
                                     if (Items && Items.length > 0) {
                                         const updateParamEn: UpdateCommandInput = {
                                             TableName: TABLE_NAME_IS_POSTS_TRANSLATIONS,
@@ -306,12 +303,14 @@ export const handler: Handler = async (event: any) => {
             break;
         }
         case "createSitemap": {
-            const psotItem = await queryToDynamo(
+            const psotItem = await dynamodbHelpers.queryToDynamo(
                 TABLE_NAME_IS_POSTS,
                 "isPostsByStatusAndUpdatedAt",
                 "#status = :status",
+                undefined,
                 { "#status": "status" },
-                { ":status": "published" }
+                { ":status": "published" },
+                0
             );
             const posts: { slug: string; lastModified: string; }[] = [];
             for (const item of psotItem) {
@@ -384,12 +383,14 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
         tags: [],
         comments: []
     };
-    const psotItem = await queryToDynamo(
+    const psotItem = await dynamodbHelpers.queryToDynamo(
         TABLE_NAME_IS_POSTS,
         "isPostsByTitle",
         "#title = :title",
+        undefined,
         { "#title": "title" },
-        { ":title": title }
+        { ":title": title },
+        0
     );
     if (psotItem.length) return;
     const res = await axios.get(link, { headers: { "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" } });
@@ -457,12 +458,14 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
                 await docClient.send(new PutCommand(param));
 
                 // タームの登録（存在しない場合のみ）
-                const termItem = await queryToDynamo(
+                const termItem = await dynamodbHelpers.queryToDynamo(
                     TABLE_NAME_IS_TERMS,
                     "isTermsBySlug",
                     "#slug = :slug",
+                    undefined,
                     { "#slug": "slug" },
-                    { ":slug": slug }
+                    { ":slug": slug },
+                    0
                 );
                 if (!termItem.length) {
                     const param: PutCommandInput = {
@@ -565,7 +568,7 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
         .replace("{tags}", `${tags.map(item => `- ${item}`).join("\n")}`)
         .replace("{comments}", `${limitedComments.map(item => `- ${item}`).join("\n")}`);
     await outPutS3(mainContentData, `mainContent_${mainContPromptParts.id}`);
-    
+
     // ショートコンテンツ
     const shortContentData = (`${SHORT_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
@@ -609,32 +612,6 @@ async function batchWriteItems(tableName: string, items: IS_COMMENTS_INPUT[] | I
     }
 }
 
-
-async function queryToDynamo(
-    TableName: string,
-    IndexName: string,
-    KeyConditionExpression: string,
-    ExpressionAttributeNames: Record<string, any>,
-    ExpressionAttributeValues: Record<string, any>
-) {
-    const outParam = [];
-    const param: QueryCommandInput = {
-        TableName,
-        IndexName,
-        KeyConditionExpression,
-        ExpressionAttributeNames,
-        ExpressionAttributeValues
-    };
-    do {
-        console.info("QueryCommand param", param);
-        const result = await docClient.send(new QueryCommand(param));
-        console.info("QueryCommand result", result);
-        outParam.push(...result.Items ?? []);
-        param.ExclusiveStartKey = result.LastEvaluatedKey;
-    } while (param.ExclusiveStartKey);
-    return outParam;
-}
-
 // スラッグの重複チェックと更新
 async function checkSlugWithRetry(
     slug: string,
@@ -645,12 +622,14 @@ async function checkSlugWithRetry(
     const baseSlug = slug;
     let counter = 0;
     while (true) {
-        const result = await queryToDynamo(
+        const result = await dynamodbHelpers.queryToDynamo(
             tableName,
             indexName,
             keyConditionExpression,
+            undefined,
             { "#slug": "slug" },
-            { ":slug": slug }
+            { ":slug": slug },
+            0
         );
         if (result.length === 0) break;
         counter++;

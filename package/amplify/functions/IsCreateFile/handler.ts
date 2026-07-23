@@ -1,19 +1,11 @@
-import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { PutObjectCommand, NoSuchKey, S3Client } from "@aws-sdk/client-s3";
-import {
-  QueryCommand,
-  QueryCommandInput,
-  DynamoDBDocumentClient
-} from "@aws-sdk/lib-dynamodb";
 import dayjs from "dayjs";
-import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
+import * as dynamodbHelpers from '../shared/dynamodb-helpers.js';
 import type { Handler } from 'aws-lambda';
 
 // 環境変数からDynamoDBテーブル名とS3バケット名を取得
 const TABLE_NAME_SNS_POSTS: string = process.env.TABLE_NAME_SNS_POSTS ?? "";
 const BUCKET_NAME_01: string = process.env.BUCKET_NAME_01 ?? "";
-
-const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3Client = new S3Client({});
 
 export const handler: Handler = async (event) => {
@@ -24,7 +16,7 @@ export const handler: Handler = async (event) => {
         for (const platform of ["x", "threads"]) {
           try {
             // 直近7日間のThreads投稿をGSIで取得
-            const postItems = await queryToDynamo(
+            const postItems = await dynamodbHelpers.queryToDynamo(
               TABLE_NAME_SNS_POSTS,
               "isSnsByPlatformAndUpdatedAt",
               "#platform = :platform AND #updatedAt >= :updatedAt",
@@ -75,36 +67,3 @@ export const handler: Handler = async (event) => {
   }
   return { statusCode: 200, body: "" };
 };
-
-// ページネーション対応のDynamoDBクエリ（LastEvaluatedKey がなくなるまで全件取得）
-async function queryToDynamo(
-  TableName: string,
-  IndexName: string | undefined,
-  KeyConditionExpression: string,
-  FilterExpression: string | undefined,
-  ExpressionAttributeNames: Record<string, any>,
-  ExpressionAttributeValues: Record<string, any>,
-  Limit: number
-) {
-  console.info("queryToDynamo param", { TableName, IndexName, KeyConditionExpression, FilterExpression, ExpressionAttributeNames, ExpressionAttributeValues });
-  const outParam = [];
-  const param: QueryCommandInput = {
-    TableName,
-    IndexName,
-    KeyConditionExpression,
-    FilterExpression,
-    ExpressionAttributeNames,
-    ExpressionAttributeValues,
-  };
-  if (Limit) param.Limit = Limit;
-  do {
-    const result = await docClient.send(new QueryCommand(param));
-    outParam.push(...result.Items ?? []);
-    param.ExclusiveStartKey = result.LastEvaluatedKey;
-    if (Limit && outParam?.length >= Limit) {
-      break;
-    }
-  } while (param.ExclusiveStartKey);
-  console.info("queryToDynamo result", outParam);
-  return outParam;
-}

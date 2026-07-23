@@ -9,7 +9,7 @@ export function createSnsStatsWorkflow(scope: Stack, lambdaFn: ScheduledFunction
   // 3日おきに直接Lambdaを起動する EventBridge ルール
   const { IsSnsFunctionInstance } = lambdaFn;
   new events.Rule(scope, "IsSocialCheck", {
-    schedule: events.Schedule.rate(Duration.days(3)),
+    schedule: events.Schedule.rate(Duration.days(2)),
     targets: [
       new targets.LambdaFunction(IsSnsFunctionInstance, {
         event: events.RuleTargetInput.fromObject({

@@ -39,6 +39,13 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
     });
 
     // SNS投稿処理を実行し、次ステップをチェックに切り替える準備へ
+    const runReplyThreads = new tasks.LambdaInvoke(stack, "runReplyThreads", {
+        lambdaFunction: isSnsFunction,
+        payload: sfn.TaskInput.fromObject({ procType: "threadsReply" }),
+        resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    // SNS投稿処理を実行し、次ステップをチェックに切り替える準備へ
     const runPostX = new tasks.LambdaInvoke(stack, "runPostX", {
         lambdaFunction: isSnsFunction,
         payload: sfn.TaskInput.fromObject({ procType: "xPost" }),
@@ -48,6 +55,7 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
     const definition = generateWait
         .next(waitState)
         .next(runPostThreads)
+        .next(runReplyThreads)
         .next(runPostX);
 
     const stateMachine = new sfn.StateMachine(stack, "IsRandomSnsLambdaInvoker", {

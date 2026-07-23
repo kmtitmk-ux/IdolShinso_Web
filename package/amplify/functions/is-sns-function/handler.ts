@@ -3,18 +3,16 @@ import {
     GetCommand,
     PutCommand,
     PutCommandInput,
-    QueryCommand,
-    QueryCommandInput,
     UpdateCommand,
     UpdateCommandInput,
     DynamoDBDocumentClient
 } from "@aws-sdk/lib-dynamodb";
 import dayjs from "dayjs";
 import { v4 as uuidv4 } from 'uuid';
+import * as dynamodbHelpers from '../shared/dynamodb-helpers.js';
 import * as threads from './threads';
 import * as x from './x';
 import type { Handler } from 'aws-lambda';
-import type { NativeAttributeValue } from "@aws-sdk/util-dynamodb";
 
 type ThreadsMetric = {
     name: string;
@@ -31,20 +29,22 @@ export const handler: Handler = async (event) => {
     try {
         switch (event.procType) {
             case "threadsPost": {
-                const postItems = await queryToDynamo(
+                const postItems = await dynamodbHelpers.queryToDynamo(
                     TABLE_NAME_IS_SNS,
                     "isSnsByStatusAndUpdatedAt",
                     "#status = :status AND #updatedAt >= :updatedAt",
-                    "#lang = :ja",
+                    "#lang = :lang",
                     {
                         "#status": "status",
                         "#updatedAt": "updatedAt",
+                        "#platform": "platform",
                         "#lang": "lang"
                     },
                     {
                         ":status": "scheduled",
                         ":updatedAt": dayjs().subtract(4, "day").toISOString(),
-                        ":ja": "ja"
+                        ":platform": "threads",
+                        ":lang": "ja"
                     },
                     1
                 );
@@ -58,16 +58,16 @@ export const handler: Handler = async (event) => {
                 const updateParam: UpdateCommandInput = {
                     TableName: TABLE_NAME_IS_SNS,
                     Key: { id: postItem.id },
-                    UpdateExpression: "SET #snsPostId = :snsPostId, #platform = :threads, #status = :posted",
+                    UpdateExpression: "SET #snsPostId = :snsPostId, #status = :posted, #updatedAt = :updatedAt",
                     ExpressionAttributeNames: {
                         "#snsPostId": "snsPostId",
-                        "#platform": "platform",
-                        "#status": "status"
+                        "#status": "status",
+                        "#updatedAt": "updatedAt"
                     },
                     ExpressionAttributeValues: {
                         ":snsPostId": snsPostId,
-                        ":threads": "threads",
-                        ":posted": "posted"
+                        ":posted": "posted",
+                        ":updatedAt": dayjs().toISOString()
                     }
                 };
                 console.info("UpdateCommand param", updateParam);
@@ -75,11 +75,11 @@ export const handler: Handler = async (event) => {
                 break;
             }
             case "xPost": {
-                const postItems = await queryToDynamo(
+                const postItems = await dynamodbHelpers.queryToDynamo(
                     TABLE_NAME_IS_SNS,
                     "isSnsByStatusAndUpdatedAt",
                     "#status = :scheduled AND #updatedAt >= :updatedAt",
-                    "#platform = :x AND #lang = :ja",
+                    "#platform = :platform AND #lang = :lang",
                     {
                         "#status": "status",
                         "#updatedAt": "updatedAt",
@@ -89,8 +89,8 @@ export const handler: Handler = async (event) => {
                     {
                         ":scheduled": "scheduled",
                         ":updatedAt": dayjs().subtract(4, "day").toISOString(),
-                        ":x": "x",
-                        ":ja": "ja"
+                        ":platform": "x",
+                        ":lang": "ja"
                     },
                     1
                 );
@@ -103,18 +103,16 @@ export const handler: Handler = async (event) => {
                 const updateParam: UpdateCommandInput = {
                     TableName: TABLE_NAME_IS_SNS,
                     Key: { id: postItem.id },
-                    UpdateExpression: "SET #engagementRate = :engagementRate, #status = :posted, #snsPostId = :snsPostId, #updatedAt = :now",
+                    UpdateExpression: "SET #status = :posted, #snsPostId = :snsPostId, #updatedAt = :updatedAt",
                     ExpressionAttributeNames: {
-                        "#engagementRate": "engagementRate",
                         "#status": "status",
                         "#snsPostId": "snsPostId",
                         "#updatedAt": "updatedAt"
                     },
                     ExpressionAttributeValues: {
-                        ":engagementRate": 0,
                         ":posted": "posted",
                         ":snsPostId": snsPostId,
-                        ":now": dayjs().toISOString()
+                        ":updatedAt": dayjs().toISOString()
                     }
                 };
                 console.info("UpdateCommand param", updateParam);
@@ -124,11 +122,11 @@ export const handler: Handler = async (event) => {
             case "threadsCheck": {
                 // 投稿後のエンゲージメントをチェック
                 const [postedItems, repliedItems] = await Promise.all([
-                    queryToDynamo(
+                    dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
                         "isSnsByStatusAndUpdatedAt",
                         "#status = :status AND #updatedAt >= :updatedAt",
-                        "#platform = :threads AND #lang = :ja AND attribute_not_exists(#crossPosted)",
+                        "#platform = :platform AND #lang = :lang AND attribute_not_exists(#crossPosted)",
                         {
                             "#status": "status",
                             "#updatedAt": "updatedAt",
@@ -138,17 +136,17 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "posted",
-                            ":updatedAt": dayjs().subtract(7, "day").toISOString(),
-                            ":threads": "threads",
-                            ":ja": "ja"
+                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":platform": "threads",
+                            ":lang": "ja"
                         },
-                        35
+                        25
                     ),
-                    queryToDynamo(
+                    dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
                         "isSnsByStatusAndUpdatedAt",
                         "#status = :status AND #updatedAt >= :updatedAt",
-                        "#platform = :threads AND #lang = :ja AND attribute_not_exists(#crossPosted)",
+                        "#platform = :platform AND #lang = :lang AND attribute_not_exists(#crossPosted)",
                         {
                             "#status": "status",
                             "#updatedAt": "updatedAt",
@@ -158,11 +156,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "replied",
-                            ":updatedAt": dayjs().subtract(7, "day").toISOString(),
-                            ":threads": "threads",
-                            ":ja": "ja"
+                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":platform": "threads",
+                            ":lang": "ja"
                         },
-                        35
+                        25
                     )
                 ]);
                 const checkItems = [
@@ -216,6 +214,7 @@ export const handler: Handler = async (event) => {
                             console.info("PutCommand param", putParam);
                             const putResult = await docClient.send(new PutCommand(putParam));
                             console.info("PutCommand result", putResult);
+                            // threads側のcrossPostedを更新
                             const crossPostedUpdateParam: UpdateCommandInput = {
                                 TableName: TABLE_NAME_IS_SNS,
                                 Key: { id: item.id },
@@ -239,11 +238,11 @@ export const handler: Handler = async (event) => {
             case "xCheck": {
                 // 投稿後のエンゲージメントをチェック
                 const [postedItems, repliedItems] = await Promise.all([
-                    queryToDynamo(
+                    dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
                         "isSnsByStatusAndUpdatedAt",
                         "#status = :status AND #updatedAt >= :updatedAt",
-                        "#platform = :x AND #lang = :ja",
+                        "#platform = :platform AND #lang = :lang",
                         {
                             "#status": "status",
                             "#updatedAt": "updatedAt",
@@ -252,17 +251,17 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "posted",
-                            ":updatedAt": dayjs().subtract(7, "day").toISOString(),
-                            ":x": "x",
-                            ":ja": "ja"
+                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":platform": "x",
+                            ":lang": "ja"
                         },
-                        35
+                        25
                     ),
-                    queryToDynamo(
+                    dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
                         "isSnsByStatusAndUpdatedAt",
                         "#status = :status AND #updatedAt >= :updatedAt",
-                        "#platform = :x AND #lang = :ja",
+                        "#platform = :platform AND #lang = :lang",
                         {
                             "#status": "status",
                             "#updatedAt": "updatedAt",
@@ -271,11 +270,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "replied",
-                            ":updatedAt": dayjs().subtract(7, "day").toISOString(),
-                            ":x": "x",
-                            ":ja": "ja"
+                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":platform": "x",
+                            ":lang": "ja"
                         },
-                        35
+                        25
                     )
                 ]);
                 const checkItems = [
@@ -296,7 +295,6 @@ export const handler: Handler = async (event) => {
                         const { like_count, retweet_count, impression_count } = data.public_metrics;
                         const engagementCount = like_count + retweet_count;
                         const engagementRate = impression_count > 0 ? engagementCount / impression_count : 0;
-                        // エンゲージメントが一定数を超えたらリプライを投稿
                         const snsPostId = data.id;
                         const item = checkItems.find(item => item.snsPostId === snsPostId);
                         const postId = item?.postId ?? "";
@@ -312,14 +310,14 @@ export const handler: Handler = async (event) => {
                             const updateParam: UpdateCommandInput = {
                                 TableName: TABLE_NAME_IS_SNS,
                                 Key: { id: item.id },
-                                UpdateExpression: "SET #engagementRate = :engagementRate, #status = :replied",
+                                UpdateExpression: "SET #engagementRate = :engagementRate, #status = :status",
                                 ExpressionAttributeNames: {
                                     "#engagementRate": "engagementRate",
                                     "#status": "status",
                                 },
                                 ExpressionAttributeValues: {
                                     ":engagementRate": engagementRate,
-                                    ":replied": "replied"
+                                    ":status": "replied"
                                 }
                             };
                             await docClient.send(new UpdateCommand(updateParam));
@@ -331,11 +329,11 @@ export const handler: Handler = async (event) => {
                 break;
             }
             case "threadsReply": {
-                const postItems = await queryToDynamo(
+                const postItems = await dynamodbHelpers.queryToDynamo(
                     TABLE_NAME_IS_SNS,
                     "isSnsByStatusAndUpdatedAt",
                     "#status = :status AND #updatedAt >= :updatedAt",
-                    "#platform = :threads AND #engagementRate >= :engagementRate AND #lang = :ja",
+                    "#platform = :platform AND #engagementRate >= :engagementRate AND #lang = :lang",
                     {
                         "#status": "status",
                         "#updatedAt": "updatedAt",
@@ -345,10 +343,10 @@ export const handler: Handler = async (event) => {
                     },
                     {
                         ":status": "posted",
-                        ":updatedAt": dayjs().subtract(2, "day").toISOString(),
-                        ":threads": "threads",
+                        ":updatedAt": dayjs().subtract(3, "day").toISOString(),
+                        ":platform": "threads",
                         ":engagementRate": 0.01,
-                        ":ja": "ja"
+                        ":lang": "ja"
                     },
                     1
                 );
@@ -373,9 +371,9 @@ export const handler: Handler = async (event) => {
                 const updateParam: UpdateCommandInput = {
                     TableName: TABLE_NAME_IS_SNS,
                     Key: { id: postItem.id },
-                    UpdateExpression: "SET #status = :replied",
+                    UpdateExpression: "SET #status = :status",
                     ExpressionAttributeNames: { "#status": "status" },
-                    ExpressionAttributeValues: { ":replied": "replied" }
+                    ExpressionAttributeValues: { ":status": "replied" }
                 };
                 await docClient.send(new UpdateCommand(updateParam));
                 break;
@@ -394,35 +392,3 @@ export const handler: Handler = async (event) => {
         body: ""
     };
 };
-
-
-// 
-async function queryToDynamo(
-    TableName: string,
-    IndexName: string | undefined,
-    KeyConditionExpression: string,
-    FilterExpression: string | undefined,
-    ExpressionAttributeNames: Record<string, string>,
-    ExpressionAttributeValues: Record<string, NativeAttributeValue>,
-    Limit: number
-) {
-    console.info("queryToDynamo param", { TableName, IndexName, KeyConditionExpression, FilterExpression, ExpressionAttributeNames, ExpressionAttributeValues });
-    const outParam = [];
-    const param: QueryCommandInput = {
-        TableName,
-        IndexName,
-        KeyConditionExpression,
-        FilterExpression,
-        ExpressionAttributeNames,
-        ExpressionAttributeValues,
-        Limit
-    };
-    do {
-        const result = await docClient.send(new QueryCommand(param));
-        outParam.push(...result.Items ?? []);
-        param.ExclusiveStartKey = result.LastEvaluatedKey;
-        if (outParam?.length >= Limit) break;
-    } while (param.ExclusiveStartKey);
-    console.info("queryToDynamo result", outParam);
-    return outParam;
-}
