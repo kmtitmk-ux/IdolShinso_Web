@@ -83,6 +83,6 @@ export async function getPostInsights(postId: string) {
             }
         }
     );
-    console.info("Post Insights:", res.data.data);
+    console.info("Post Insights:", JSON.stringify(res.data, null, 2));
     return res.data;
 }
