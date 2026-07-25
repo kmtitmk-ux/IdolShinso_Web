@@ -33,7 +33,7 @@ export const handler: Handler = async (event) => {
                     TABLE_NAME_IS_SNS,
                     "isSnsByStatusAndUpdatedAt",
                     "#status = :status AND #updatedAt >= :updatedAt",
-                    "#lang = :lang",
+                    "#platform = :platform AND #lang = :lang",
                     {
                         "#status": "status",
                         "#updatedAt": "updatedAt",
