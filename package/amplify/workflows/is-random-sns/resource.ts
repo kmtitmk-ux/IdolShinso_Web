@@ -38,10 +38,17 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
         resultPath: sfn.JsonPath.DISCARD,
     });
 
-    // SNS投稿処理を実行し、次ステップをチェックに切り替える準備へ
-    const runReplyThreads = new tasks.LambdaInvoke(stack, "runReplyThreads", {
+    // 当日のエンゲージメントをチェック
+    const runThreadsTodayCheck = new tasks.LambdaInvoke(stack, "runThreadsTodayCheck", {
         lambdaFunction: isSnsFunction,
-        payload: sfn.TaskInput.fromObject({ procType: "threadsReply" }),
+        payload: sfn.TaskInput.fromObject({ procType: "threadsTodayCheck" }),
+        resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    // URL付きのリプライを投稿
+    const runReplyUrlThreads = new tasks.LambdaInvoke(stack, "runReplyUrlThreads", {
+        lambdaFunction: isSnsFunction,
+        payload: sfn.TaskInput.fromObject({ procType: "threadsReplyUrl" }),
         resultPath: sfn.JsonPath.DISCARD,
     });
 
@@ -55,7 +62,8 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
     const definition = generateWait
         .next(waitState)
         .next(runPostThreads)
-        .next(runReplyThreads)
+        .next(runThreadsTodayCheck)
+        .next(runReplyUrlThreads)
         .next(runPostX);
 
     const stateMachine = new sfn.StateMachine(stack, "IsRandomSnsLambdaInvoker", {
@@ -84,7 +92,7 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
     new aws_events.CfnRule(stack, "StepFunctionTriggerRule", {
         eventBusName: eventBusForStepFunc.eventBusName,
         name: process.env.RULE_NAME_IS_02 ?? `Is-triggerStepFunction-${BRANCH}`,
-        scheduleExpression: "cron(0 10,11,12,13,14 * * ? *)",
+        scheduleExpression: "cron(0 3,8,9,10,11,12,13,14,22,23 * * ? *)",
         state: BRANCH === "main" ? "ENABLED" : "DISABLED",
         targets: [
             {

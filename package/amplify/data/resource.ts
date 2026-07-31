@@ -113,19 +113,22 @@ const schema = a.schema({
     IsSns: a
         .model({
             contentText: a.string(),
+            createdAt: a.datetime(),
+            crossPosted: a.boolean(),
+            engagementRate: a.float(),
+            lang: a.string().required(),
             postId: a.id(),
+            post: a.belongsTo('IsPosts', 'postId'),
             platform: a.string(),
+            s3Key: a.string(),
             snsPostId: a.string(),
             status: a.string().required(),
             updatedAt: a.datetime(),
-            post: a.belongsTo('IsPosts', 'postId'),
-            lang: a.string().required(),
-            engagementRate: a.float(),
-            crossPosted: a.boolean()
         })
         .secondaryIndexes((index) => [
             index('status').sortKeys(['updatedAt']),
             index('platform').sortKeys(['updatedAt']),
+            index('platform').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest()]),
 });

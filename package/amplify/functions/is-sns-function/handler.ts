@@ -12,12 +12,15 @@ import { v4 as uuidv4 } from 'uuid';
 import * as dynamodbHelpers from '../shared/dynamodb-helpers.js';
 import * as threads from './threads';
 import * as x from './x';
+import * as googleSheets from './googleSheets';
 import type { Handler } from 'aws-lambda';
+import type { Schema } from '../../data/resource';
 
 type ThreadsMetric = {
     name: string;
     values: { value: number; }[];
 };
+type IsPostsItem = Schema["IsPosts"]["type"];
 
 const TABLE_ID = process.env.TABLE_ID as string;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
@@ -26,8 +29,9 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
 export const handler: Handler = async (event) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
+    const { procType = "" } = event;
     try {
-        switch (event.procType) {
+        switch (procType) {
             case "threadsPost": {
                 const postItems = await dynamodbHelpers.queryToDynamo(
                     TABLE_NAME_IS_SNS,
@@ -119,6 +123,119 @@ export const handler: Handler = async (event) => {
                 await docClient.send(new UpdateCommand(updateParam));
                 break;
             }
+            case "threadsTodayCheck": {
+                const Items = await dynamodbHelpers.queryToDynamo(
+                    TABLE_NAME_IS_SNS,
+                    "isSnsByStatusAndUpdatedAt",
+                    "#status = :status AND #updatedAt >= :updatedAt",
+                    "#platform = :platform AND #lang = :lang",
+                    {
+                        "#status": "status",
+                        "#updatedAt": "updatedAt",
+                        "#platform": "platform",
+                        "#lang": "lang",
+                    },
+                    {
+                        ":status": "posted",
+                        ":updatedAt": dayjs().subtract(12, "hour").toISOString(),
+                        ":platform": "threads",
+                        ":lang": "ja"
+                    },
+                    10
+                );
+                if (Items.length === 0) {
+                    console.info("No items.");
+                    break;
+                }
+                for (const Item of Items) {
+                    const insights = await threads.getPostInsights(Item.snsPostId);
+                    const metrics = insights.data ?? [];
+                    const engagementCount = metrics
+                        .filter((metric: ThreadsMetric) =>
+                            ['likes', 'reposts'].includes(metric.name)
+                        )
+                        .reduce((sum: number, metric: ThreadsMetric) => {
+                            return sum + (metric?.values?.[0]?.value ?? 0);
+                        }, 0);
+                    const views = metrics.find(
+                        (metric: ThreadsMetric) => metric.name === "views"
+                    )?.values?.[0]?.value ?? 0;
+                    let engagementRate = 0;
+                    if (views > 0) {
+                        engagementRate = engagementCount / views;
+                    } else if (engagementCount > 0) {
+                        engagementRate = 0.02;
+                    }
+                    const updateParam: UpdateCommandInput = {
+                        TableName: TABLE_NAME_IS_SNS,
+                        Key: { id: Item.id },
+                        UpdateExpression: "SET #engagementRate = :engagementRate",
+                        ExpressionAttributeNames: {
+                            "#engagementRate": "engagementRate"
+                        },
+                        ExpressionAttributeValues: {
+                            ":engagementRate": engagementRate
+                        }
+                    };
+                    console.info("UpdateCommand param", updateParam);
+                    await docClient.send(new UpdateCommand(updateParam));
+                }
+                break;
+            }
+            case "threadsReplyUrl": {
+                const Items = await dynamodbHelpers.queryToDynamo(
+                    TABLE_NAME_IS_SNS,
+                    "isSnsByStatusAndUpdatedAt",
+                    "#status = :status AND #updatedAt >= :updatedAt",
+                    "#platform = :platform AND #engagementRate >= :engagementRate AND #lang = :lang",
+                    {
+                        "#status": "status",
+                        "#updatedAt": "updatedAt",
+                        "#platform": "platform",
+                        "#lang": "lang",
+                        "#engagementRate": "engagementRate"
+                    },
+                    {
+                        ":status": "posted",
+                        ":updatedAt": dayjs().subtract(12, "hour").toISOString(),
+                        ":platform": "threads",
+                        ":lang": "ja",
+                        ":engagementRate": 0.01
+                    },
+                    10
+                );
+                if (!Items.length) {
+                    console.info("No items.");
+                    break;
+                }
+                for (const Item of Items) {
+                    const getItem = (await docClient.send(new GetCommand({
+                        TableName: TABLE_NAME_IS_POSTS,
+                        Key: { id: Item.postId }
+                    }))).Item as IsPostsItem | undefined;
+                    console.info("GetCommand result", getItem);
+                    if (!getItem) {
+                        console.warn(`No post item found for postId: ${Item.postId}`);
+                        continue;
+                    }
+                    const postText = getItem.rewrittenTitle;
+                    const userId = await threads.getUserId();
+                    await threads.replyToThreads(
+                        userId,
+                        Item.snsPostId,
+                        `${postText}\n\nhttps://geinouwasa.com/posts/${getItem?.slug}`
+                    );
+                    const updateParam: UpdateCommandInput = {
+                        TableName: TABLE_NAME_IS_SNS,
+                        Key: { id: Item.id },
+                        UpdateExpression: "SET #status = :status",
+                        ExpressionAttributeNames: { "#status": "status" },
+                        ExpressionAttributeValues: { ":status": "replied" }
+                    };
+                    await docClient.send(new UpdateCommand(updateParam));
+                }
+                break;
+            }
             case "threadsCheck": {
                 // 投稿後のエンゲージメントをチェック
                 const [postedItems, repliedItems] = await Promise.all([
@@ -136,11 +253,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "posted",
-                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":updatedAt": dayjs().subtract(3, "day").toISOString(),
                             ":platform": "threads",
                             ":lang": "ja"
                         },
-                        25
+                        30
                     ),
                     dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
@@ -156,11 +273,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "replied",
-                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":updatedAt": dayjs().subtract(3, "day").toISOString(),
                             ":platform": "threads",
                             ":lang": "ja"
                         },
-                        25
+                        30
                     )
                 ]);
                 const checkItems = [
@@ -185,7 +302,12 @@ export const handler: Handler = async (event) => {
                         const views = metrics.find(
                             (metric: ThreadsMetric) => metric.name === "views"
                         )?.values?.[0]?.value ?? 0;
-                        const engagementRate = views > 0 ? engagementCount / views : 0;
+                        let engagementRate = 0;
+                        if (views > 0) {
+                            engagementRate = engagementCount / views;
+                        } else if (engagementCount > 0) {
+                            engagementRate = 0.02;
+                        }
                         const updateParam: UpdateCommandInput = {
                             TableName: TABLE_NAME_IS_SNS,
                             Key: { id: item.id },
@@ -199,7 +321,7 @@ export const handler: Handler = async (event) => {
                         };
                         console.info("UpdateCommand param", updateParam);
                         await docClient.send(new UpdateCommand(updateParam));
-                        if (engagementRate >= 0.01 && !item.crossPosted) {
+                        if (engagementRate >= 0.02 && !item.crossPosted) {
                             const newItem = { ...item };
                             newItem.id = uuidv4();
                             newItem.platform = "x";
@@ -251,11 +373,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "posted",
-                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":updatedAt": dayjs().subtract(3, "day").toISOString(),
                             ":platform": "x",
                             ":lang": "ja"
                         },
-                        25
+                        15
                     ),
                     dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_IS_SNS,
@@ -270,11 +392,11 @@ export const handler: Handler = async (event) => {
                         },
                         {
                             ":status": "replied",
-                            ":updatedAt": dayjs().subtract(5, "day").toISOString(),
+                            ":updatedAt": dayjs().subtract(3, "day").toISOString(),
                             ":platform": "x",
                             ":lang": "ja"
                         },
-                        25
+                        15
                     )
                 ]);
                 const checkItems = [
@@ -289,6 +411,7 @@ export const handler: Handler = async (event) => {
                     console.info("No items.");
                     break;
                 }
+                const updateRows = [];
                 const insightsRes = await x.getPostInsights(ids);
                 for (const data of insightsRes.data) {
                     try {
@@ -297,16 +420,21 @@ export const handler: Handler = async (event) => {
                         const engagementRate = impression_count > 0 ? engagementCount / impression_count : 0;
                         const snsPostId = data.id;
                         const item = checkItems.find(item => item.snsPostId === snsPostId);
-                        const postId = item?.postId ?? "";
-                        if (!postId) continue;
-                        // const { Item: getResult } = await docClient.send(new GetCommand({
-                        //     TableName: TABLE_NAME_IS_POSTS,
-                        //     Key: { id: postId }
-                        // }));
-                        // console.info("GetCommand result", getResult);
-                        // // リプライ実行
-                        // await x.replyToX(`${getResult?.rewrittenTitle}\n\nhttps://geinouwasa.com/posts/${getResult?.slug}`, snsPostId);
-                        if (item?.id) {
+                        if (item) {
+                            const { Item: getItem } = await docClient.send(new GetCommand({
+                                TableName: TABLE_NAME_IS_POSTS,
+                                Key: { id: item.postId }
+                            }));
+                            console.info("GetCommand result", getItem);
+                            if (getItem) {
+                                updateRows.push([
+                                    item.id,
+                                    item.snsPostId,
+                                    item.contentText,
+                                    `${getItem.rewrittenTitle}\n\nhttps://geinouwasa.com/posts/${getItem.slug}`,
+                                    `https://x.com/IdolShinso/status/${item.snsPostId}`
+                                ]);
+                            }
                             const updateParam: UpdateCommandInput = {
                                 TableName: TABLE_NAME_IS_SNS,
                                 Key: { id: item.id },
@@ -326,60 +454,11 @@ export const handler: Handler = async (event) => {
                         console.warn(error);
                     }
                 }
-                break;
-            }
-            case "threadsReply": {
-                const postItems = await dynamodbHelpers.queryToDynamo(
-                    TABLE_NAME_IS_SNS,
-                    "isSnsByStatusAndUpdatedAt",
-                    "#status = :status AND #updatedAt >= :updatedAt",
-                    "#platform = :platform AND #engagementRate >= :engagementRate AND #lang = :lang",
-                    {
-                        "#status": "status",
-                        "#updatedAt": "updatedAt",
-                        "#platform": "platform",
-                        "#engagementRate": "engagementRate",
-                        "#lang": "lang"
-                    },
-                    {
-                        ":status": "posted",
-                        ":updatedAt": dayjs().subtract(3, "day").toISOString(),
-                        ":platform": "threads",
-                        ":engagementRate": 0.01,
-                        ":lang": "ja"
-                    },
-                    1
-                );
-                if (postItems.length === 0) {
-                    console.info("No items.");
-                    break;
-                }
-                const postItem = postItems[0];
-                const postId = postItem.postId;
-                const { Item: getResult } = await docClient.send(new GetCommand({
-                    TableName: TABLE_NAME_IS_POSTS,
-                    Key: { id: postId }
-                }));
-                console.info("GetCommand result", getResult);
-                const postText = getResult?.rewrittenTitle;
-                const userId = await threads.getUserId();
-                await threads.replyToThreads(
-                    userId,
-                    postItem.snsPostId,
-                    `${postText}\n\nhttps://geinouwasa.com/posts/${getResult?.slug}`
-                );
-                const updateParam: UpdateCommandInput = {
-                    TableName: TABLE_NAME_IS_SNS,
-                    Key: { id: postItem.id },
-                    UpdateExpression: "SET #status = :status",
-                    ExpressionAttributeNames: { "#status": "status" },
-                    ExpressionAttributeValues: { ":status": "replied" }
-                };
-                await docClient.send(new UpdateCommand(updateParam));
+                await googleSheets.appendData(updateRows);
                 break;
             }
             default:
-                throw new Error(`Unsupported procType: ${event.procType}`);
+                throw new Error(`Unsupported procType: ${procType}`);
         }
     } catch (error: any) {
         console.error(error);

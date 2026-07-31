@@ -15,15 +15,23 @@ import { getUrl } from 'aws-amplify/storage';
 
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import type { Schema } from '@/amplify/data/resource';
+
+interface pkDateProps {
+    status: string;
+    createdAt: { between: [string, string]; };
+}
+interface pkCategoryProps {
+    slugTaxonomy: string;
+}
 const NextPage = ({
     token = null,
     queryType = "",
-    pk = "",
+    pk,
     lang = ""
 }: {
     token: string | null;
     queryType: string;
-    pk: string;
+    pk?: pkCategoryProps | pkDateProps;
     lang: string;
 }) => {
     const [items, setItems] = useState<any[]>([]);
@@ -59,8 +67,60 @@ const NextPage = ({
         } = {};
         try {
             switch (queryType) {
-                case "category":
+                case "date": {
+                    const datePk = { ...pk } as pkDateProps;
+                    console.info("fetch date", pk);
+                    res = await client.models.IsPosts.listIsPostsByStatusAndCreatedAt(datePk, {
+                        sortDirection: "DESC",
+                        limit: 8,
+                        nextToken: nextToken,
+                        selectionSet: [
+                            "id",
+                            "slug",
+                            "title",
+                            "rewrittenTitle",
+                            "thumbnail",
+                            "createdAt",
+                            "postmeta.id",
+                            "postmeta.slug",
+                            "postmeta.name",
+                            "postmeta.taxonomy",
+                            "postsTranslations.lang",
+                            "postsTranslations.rewrittenTitle"
+                        ],
+                    });
+                    res.data = await Promise.all((res.data ?? []).map(async (item: any) => {
+                        const postsTranslations = (item?.postsTranslations ?? []).filter((pm: any) => {
+                            if (lang !== "ja") {
+                                return pm.lang === lang;
+                            } else {
+                                return false;
+                            }
+                        })[0];
+                        let imageUrl = "";
+                        if (item.thumbnail) {
+                            const { url } = await getUrl({ path: item.thumbnail });
+                            imageUrl = url.toString();
+                        }
+                        return {
+                            id: item.id,
+                            slug: item.slug,
+                            title: item.title,
+                            rewrittenTitle: postsTranslations?.rewrittenTitle ?? item?.rewrittenTitle,
+                            thumbnail: item.thumbnail,
+                            imageUrl,
+                            createdAt: item.createdAt,
+                            postmeta: item.postmeta.filter((pm: any) => {
+                                return pm.taxonomy === "category";
+                            })
+                        };
+                    }));
+                    setItems((prev) => [...prev, ...(res?.data ?? [])]);
+                    break;
+                }
+                case "category": {
                     console.info("fetch category", pk);
+                    const categoryPk = { ...pk } as pkCategoryProps;
                     const categoryListParams: any = {
                         sortDirection: "DESC",
                         limit: 8,
@@ -85,9 +145,7 @@ const NextPage = ({
                     };
                     let categoryList: any[] = [];
                     do {
-                        const tempRes = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
-                            slugTaxonomy: pk
-                        }, categoryListParams);
+                        const tempRes = await client.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(categoryPk, categoryListParams);
                         const filterData = (tempRes.data ?? []).filter((item: any) => item.post !== null);
                         categoryList = [...categoryList, ...filterData];
                         categoryListParams.nextToken = tempRes.nextToken;
@@ -121,6 +179,7 @@ const NextPage = ({
                     }
                     setItems((prev) => [...prev, ...editData]);
                     break;
+                }
                 default:
                     res = await client.models.IsPosts.listIsPostsByStatusAndCreatedAt({
                         status: "published"
@@ -187,7 +246,7 @@ const NextPage = ({
                     <CircularProgress />
                 </Grid>
             )}
-            <Blog data={items} lang={lang} />
+            <Blog data={items} lang={lang} type="nextPage"/>
             <div ref={loader} style={{ height: "40px" }} />
         </>
     );

@@ -19,13 +19,24 @@ import {
     MenuItem,
     Submenu,
 } from "react-mui-sidebar";
-import { IconPoint } from '@tabler/icons-react';
+import { IconPoint, IconTypography } from '@tabler/icons-react';
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { uniqueId } from "lodash";
 import { Upgrade } from "./Updrade";
 import { generateClient } from 'aws-amplify/data';
+// import {
+//     IconAperture,
+//     IconCopy,
+//     IconLayoutDashboard,
+//     IconLogin,
+//     IconMoodHappy,
+//     IconUserPlus,
+// } from "@tabler/icons-react";
+import dayjs from "dayjs";
 import type { Schema } from '@/amplify/data/resource';
+
+const client = generateClient<Schema>();
 
 type SidebarMenuItem = {
     navlabel?: boolean;
@@ -34,6 +45,7 @@ type SidebarMenuItem = {
     title?: string | null; // null を許容
     icon?: React.ElementType;
     href?: string;
+    children?: SidebarMenuItem[];
 };
 type LangCode = "ja" | "en" | "zh-TW";
 const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any, lang: LangCode) => {
@@ -49,7 +61,7 @@ const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any, lang: LangCo
                 />
             );
         }
-        //If the item has children (submenu)
+        // If the item has children (submenu)
         if (item.children) {
             return (
                 <Submenu
@@ -80,52 +92,71 @@ const renderMenuItems = (items: SidebarMenuItem[], pathDirect: any, lang: LangCo
     });
 };
 
-const SidebarItems = ({ lang }: { lang: LangCode; }) => {
+
+const SidebarItems = ({ lang, categoryList, archiveList }: { lang: LangCode; categoryList: any; archiveList: any; }) => {
     const pathname = usePathname();
     const pathDirect = pathname;
-    const [menuitems, setMenuitems] = useState<SidebarMenuItem[]>([
-        {
-            id: uniqueId(),
-            navlabel: true,
-            subheader: "カテゴリー",
-        },
-        // {
-        //     id: uniqueId(),
-        //     title: "Typography",
-        //     icon: IconCircleChevronRight ,
-        //     href: "/utilities/typography",
-        // }
-    ]);
-    const client = generateClient<Schema>();
 
-    useEffect(() => {
-        const fetchData = async () => {
-            const { data, errors } = await client.models.IsTerms.listIsTermsByTaxonomy({
-                // nextToken: nextToken || undefined,
-                taxonomy: "category"
-            });
-            // console.info("fetched sidebar:", data);
-            if (errors) {
-                console.error(errors);
-                return;
+    function buildCategoryData(categoryList: any): SidebarMenuItem[] {
+        const result: SidebarMenuItem[] = categoryList.map((item: any) => ({
+            id: item.id,
+            title: item.name,
+            icon: IconCircleChevronRight,
+            href: `/category/${item.slug}`,
+        }));
+
+        return [{ id: uniqueId(), navlabel: true, subheader: "カテゴリー", }, ...result];
+    };
+
+    function buildArchiveMenuItems(archiveList: any): SidebarMenuItem[] {
+        const [latestData, oldestData] = archiveList;
+
+        // 年ごとにグループ化するためのマップ
+        const yearMap = new Map<string, SidebarMenuItem[]>();
+
+        let current = dayjs(oldestData[0]?.createdAt);
+        const endDate = dayjs(latestData[0]?.createdAt);
+
+        while (current.isBefore(endDate) || current.isSame(endDate, "month")) {
+            const year = current.format("YYYY");
+            const month = current.format("M"); // "1" 〜 "12"
+            const hrefFormat = current.format("YYYY/MM");
+
+            if (!yearMap.has(year)) {
+                yearMap.set(year, []);
             }
-            const mapped: SidebarMenuItem[] = data.map((item) => ({
-                id: item.id,
-                title: item.name,
-                icon: IconCircleChevronRight,
-                href: `/${item.taxonomy}/${item.slug}`,
-            }));
-            // 初期固定メニュー + API 取得カテゴリをマージ
-            setMenuitems((prev: SidebarMenuItem[]) => {
-                const existingTitles = new Set(prev.map(i => i.title));
-                const filtered = mapped.filter(item => !existingTitles.has(item.title));
-                return [...prev, ...filtered];
+            yearMap.get(year)!.push({
+                id: hrefFormat,
+                title: `${month}月`,
+                icon: IconPoint,
+                href: `date/${hrefFormat}`,
             });
-        };
-        fetchData();
-    }, []);
+            current = current.add(1, "month");
+        }
 
-    console.log("lang", lang);
+        // 新しい年が上に来るように降順ソート
+        const result: SidebarMenuItem[] = Array.from(yearMap.entries())
+            .sort(([yearA], [yearB]) => Number(yearB) - Number(yearA))
+            .map(([year, monthChildren]) => ({
+                id: year,
+                title: `${year}年`,
+                icon: IconCircleChevronRight,
+                children: [
+                    {
+                        id: `${year}-all`,
+                        title: `${year}年 すべての記事`,
+                        icon: IconPoint,
+                        href: `date/${year}`, // 年単位のアーカイブページ
+                    },
+                    ...monthChildren.reverse(),
+                ],
+            }));
+        return [
+            { id: "archive-heading", navlabel: true, subheader: "アーカイブ" },
+            ...result,
+        ];
+    }
+
     return (
         <>
             <MUI_Sidebar width={"100%"} showProfile={false} themeColor={"#5D87FF"} themeSecondaryColor={'#49beff'} >
@@ -138,10 +169,8 @@ const SidebarItems = ({ lang }: { lang: LangCode; }) => {
                         priority
                     />
                 </Box>
-                {renderMenuItems(menuitems, pathDirect, lang)}
-                {/* <Box px={2}>
-                    <Upgrade />
-                </Box> */}
+                {renderMenuItems(buildArchiveMenuItems(archiveList), pathDirect, lang)}
+                {renderMenuItems(buildCategoryData(categoryList), pathDirect, lang)}
             </MUI_Sidebar>
         </>
     );

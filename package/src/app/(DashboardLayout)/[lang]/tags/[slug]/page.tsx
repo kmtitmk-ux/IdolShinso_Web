@@ -6,6 +6,9 @@ interface PageProps {
         slug: string;
         lang: string;
     }>;
+    searchParams: Promise<{
+        token?: string;
+    }>;
 }
 export async function generateMetadata({ params }: PageProps) {
     const { slug, lang } = await params;
@@ -23,8 +26,8 @@ export async function generateMetadata({ params }: PageProps) {
         description: `【${data[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
     };
 }
-const Tag = async ({ params }: PageProps) => {
-    return <Category params={params} taxonomy={"tags"} />;
+const Tag = async ({ params, searchParams }: PageProps) => {
+    return <Category params={params} taxonomy={"tags"} searchParams={searchParams}/>;
 };
 
 export default Tag;

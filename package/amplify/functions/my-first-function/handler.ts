@@ -44,75 +44,7 @@ const TABLE_NAME_IS_COMMENTS = `IsComments-${TABLE_ID}`;
 const TABLE_NAME_IS_POSTS_TRANSLATIONS = `IsPostsTranslations-${TABLE_ID}`;
 const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
 const MAX_BATCH_SIZE = 25;
-const TITLE_PROMPT = `以下のJSONL形式のデータには、各行に "title" キーを持つブログタイトルが含まれています。
-それぞれの "title" を、SEO対策とCTA（行動喚起）を意識して魅力的にリライトしてください。
-リライトしたタイトルは "rewrittenTitle" キーに格納してください。
 
-リライトのルール:
-- 検索されやすいキーワードを含める（例：人物名、話題、地域、目的、数字など）
-- 読者の行動を促す表現を加える（例：「必見」「保存版」「今すぐ」「簡単に」「チェック」など）
-- ターゲット読者が明確になるようにする（例：「初心者向け」「ファン必見」など）
-- 文字数は全角で28〜32文字程度を目安に、自然で読みやすい日本語にする
-- 元のタイトルの話題性は維持すること
-
-出力形式:
-- 入力と同じJSONL形式で出力すること
-- 各行に "title" と "rewrittenTitle" を含めること
-- "rewrittenTitle" にはリライト済みのタイトルを格納すること
-`;
-const MAIN_CONTENT_PROMPT = `以下に与える「タイトル」「カテゴリー」「タグ」「コメント」をもとに、ブログ記事を作成してください。
-
-タイトル: {title}
-
-カテゴリー: {category}
-
-タグ:
-{tags}
-
-コメント:
-{comments}
-
-ID:
-{id}
-
-要件:
-- 文字数：日本語で**1500〜2200文字**。この範囲を目安に整えてください。
-- 構成：導入（リード）、本文（h2/h3相当の見出しを複数使用）含める。
-- トーン：読者にとってわかりやすく、親しみやすい口調（フレンドリーかつ信頼感のある文体）。
-- 見た目：適度に<h2>, <h3>, <p>, <ul>, <ol>, <li>, <strong>等を使うこと。
-- SEO：与えられたカテゴリー、タグを自然に本文へ散りばめる。不自然なキーワード詰め込みは禁止。
-- 出力形式：純粋なHTML断片。CSSや外部スクリプトは含めない。
-- 記事内のheader, footerは不要、純粋な記事のみのとする。
-- テンポよく読めるよう、短い文章を心がけてください。
-
-出力形式:
-- ID : [ID]
-- HTML: [記事のHTMLをここに記載する]
-
-`;
-const SHORT_CONTENT_PROMPT = `以下に与える「タイトル」「カテゴリー」「タグ」「コメント」をもとに、SNS用の投稿テキストを作成してください。
-
-ID: {id}
-
-タイトル: {title}
-
-カテゴリー: {category}
-
-タグ:
-{tags}
-
-コメント:
-{comments}
-
-要件:
-- 文字数：日本語で**140文字**以内。
-- トーン：感情的な表現、喜怒哀楽をはっきり表現する。
-
-出力形式:
-- ID : [ID]
-- TEXT: [SNS用の投稿テキストをここに記載]
-
-`;
 // type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
 // type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
 // type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
@@ -147,12 +79,15 @@ export const handler: Handler = async (event: any) => {
                 if (!href) continue;
                 await scrapingContent(href, title, outputResults);
             }
-            // プロンプト作成
-            let inputData = TITLE_PROMPT + "\n";
-            inputData += outputResults.map((item: any) => {
-                return JSON.stringify(item);
-            }).join('\n');
-            await outPutS3(inputData, "title");
+            if (outputResults.length) {
+                // プロンプト作成
+                const TITLE_PROMPT = await getObjetS3(`private/prompt/TITLE_PROMPT.txt`) as string;
+                let inputData = TITLE_PROMPT + "\n";
+                inputData += outputResults.map((item: any) => {
+                    return JSON.stringify(item);
+                }).join('\n');
+                await outPutS3(inputData, "title");
+            }
             break;
         }
         case "updateRewriteTitle": {
@@ -562,6 +497,7 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
         .slice(0, 20);
 
     // メインコンテンツ
+    const MAIN_CONTENT_PROMPT = await getObjetS3(`private/prompt/MAIN_CONTENT_PROMPT.txt`) as string;
     const mainContentData = (`${MAIN_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
         .replace("{category}", category)
@@ -570,6 +506,7 @@ async function createdMainContentPrompt(mainContPromptParts: MainContPromptParts
     await outPutS3(mainContentData, `mainContent_${mainContPromptParts.id}`);
 
     // ショートコンテンツ
+    const SHORT_CONTENT_PROMPT = await getObjetS3(`private/prompt/SHORT_CONTENT_PROMPT.txt`) as string;
     const shortContentData = (`${SHORT_CONTENT_PROMPT}\n`).replace("{title}", title)
         .replace("{id}", id)
         .replace("{category}", category)
@@ -637,6 +574,7 @@ async function checkSlugWithRetry(
     }
     return slug;
 }
+
 
 // S3に画像を保存する関数
 async function getImage(ogImage: string, date: string) {

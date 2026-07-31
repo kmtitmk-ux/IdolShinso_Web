@@ -6,10 +6,15 @@ type ScheduledFunctions = {
   IsSnsFunctionInstance: IFunction;
 };
 export function createSnsStatsWorkflow(scope: Stack, lambdaFn: ScheduledFunctions, env: "sandbox" | "develop" | "main" = "sandbox") {
-  // 3日おきに直接Lambdaを起動する EventBridge ルール
   const { IsSnsFunctionInstance } = lambdaFn;
   new events.Rule(scope, "IsSocialCheck", {
-    schedule: events.Schedule.rate(Duration.days(2)),
+    schedule: events.Schedule.cron({
+      minute: "0",
+      hour: "9",
+      day: "*",
+      month: "*",
+      year: "*",
+    }),
     targets: [
       new targets.LambdaFunction(IsSnsFunctionInstance, {
         event: events.RuleTargetInput.fromObject({
@@ -24,5 +29,4 @@ export function createSnsStatsWorkflow(scope: Stack, lambdaFn: ScheduledFunction
     ],
     enabled: env === "main",
   });
-
 }

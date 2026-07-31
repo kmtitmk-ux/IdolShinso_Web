@@ -9,7 +9,11 @@ export function createFileWorkflow(scope: Stack, lambdaFn: ScheduledFunctions, e
   // 7日おきに直接Lambdaを起動する EventBridge ルール
   const { IsCreateFileInstance } = lambdaFn;
   new events.Rule(scope, "IsCreateFil", {
-    schedule: events.Schedule.rate(Duration.days(7)),
+    schedule: events.Schedule.cron({
+      minute: "0",
+      hour: "0",
+      weekDay: "SUN",
+    }),
     targets: [
       new targets.LambdaFunction(IsCreateFileInstance, {
         event: events.RuleTargetInput.fromObject({
@@ -19,5 +23,4 @@ export function createFileWorkflow(scope: Stack, lambdaFn: ScheduledFunctions, e
     ],
     enabled: env === "main",
   });
-
 }

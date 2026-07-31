@@ -13,6 +13,7 @@
     "@aws-sdk/lib-dynamodb": "^3.919.0",
     "axios": "^1.13.1",
     "dayjs": "^1.11.19",
+    "googleapis": "^173.0.0",
     "twitter-api-v2": "^1.27.0"
   }
 }

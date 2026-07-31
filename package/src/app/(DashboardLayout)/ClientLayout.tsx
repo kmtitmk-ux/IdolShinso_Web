@@ -10,7 +10,9 @@ import outputs from '@/amplify_outputs.json';
 Amplify.configure(outputs);
 
 type LangCode = "ja" | "en" | "zh-TW";
-export default function ClientLayout({ children }: { children: React.ReactNode; }) {
+export default function ClientLayout(
+    { children, categoryList, archiveList }: { children: React.ReactNode; categoryList: any; archiveList: any; }
+) {
     const [isSidebarOpen, setSidebarOpen] = useState(true);
     const [isMobileSidebarOpen, setMobileSidebarOpen] = useState(false);
     const pathLang = usePathname().split("/")[1] as LangCode;
@@ -31,6 +33,8 @@ export default function ClientLayout({ children }: { children: React.ReactNode; 
                         isMobileSidebarOpen={isMobileSidebarOpen}
                         onSidebarClose={() => setMobileSidebarOpen(false)}
                         lang={lang}
+                        categoryList={categoryList}
+                        archiveList={archiveList}
                     />
                     {/* ------------------------------------------- */}
                     {/* Main Wrapper */}

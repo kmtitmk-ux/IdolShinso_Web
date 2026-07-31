@@ -21,22 +21,22 @@ import Image from "next/image";
 import dayjs from 'dayjs';
 import outputs from '@/amplify_outputs.json';
 
-const bucketName01 = outputs?.storage?.bucket_name; // package/amplify_outputs.json
-
 const Blog = ({
     data,
-    lang
+    lang,
+    type
 }: {
     data: any[];
     lang: string;
+    type?: string;
 }) => {
     return (
         <>
+            {data.length === 0 && type !== "nextPage" && <Typography>記事が見つかりませんでした。</Typography>}
             {data.map((product: any, index: number) => {
                 const postmeta = product?.postmeta[0] || { name: "", slug: "" };
                 const postLink = lang === "ja" ? `/posts/${product.slug}` : `/${lang}/posts/${product.slug}`;
                 const termLink = lang === "ja" ? `/category/${postmeta.slug}` : `/${lang}/category/${postmeta.slug}`;
-                console.log({ product });
                 return (
                     <Grid key={index} size={{ xs: 12, md: 4, lg: 3 }}>
                         <BlankCard>

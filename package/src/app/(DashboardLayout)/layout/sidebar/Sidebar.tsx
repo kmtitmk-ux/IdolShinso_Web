@@ -7,12 +7,16 @@ interface ItemType {
     onSidebarClose: (event: React.MouseEvent<HTMLElement>) => void;
     isSidebarOpen: boolean;
     lang: LangCode;
+    categoryList: any;
+    archiveList: any;
 }
 const MSidebar = ({
     isMobileSidebarOpen = false,
     onSidebarClose = () => { },
     isSidebarOpen = true,
-    lang
+    lang,
+    categoryList,
+    archiveList
 }: ItemType) => {
     const lgUp = useMediaQuery((theme: any) => theme.breakpoints?.up("lg"));
     const sidebarWidth = "270px";
@@ -20,7 +24,6 @@ const MSidebar = ({
     const scrollbarStyles = {
         '&::-webkit-scrollbar': {
             width: '7px',
-
         },
         '&::-webkit-scrollbar-thumb': {
             backgroundColor: '#eff2f7',
@@ -50,6 +53,9 @@ const MSidebar = ({
                                 ...scrollbarStyles,
                                 width: sidebarWidth,
                             },
+                        },
+                        root: {
+                            keepMounted: true
                         }
                     }}
                 >
@@ -61,7 +67,11 @@ const MSidebar = ({
                             {/* ------------------------------------------- */}
                             {/* Sidebar Items */}
                             {/* ------------------------------------------- */}
-                            <SidebarItems lang={lang} />
+                            <SidebarItems
+                                lang={lang}
+                                categoryList={categoryList}
+                                archiveList={archiveList}
+                            />
                         </Box>
                     </Box>
                 </Drawer>
@@ -81,6 +91,9 @@ const MSidebar = ({
                         boxShadow: (theme) => theme.shadows[8],
                         ...scrollbarStyles,
                     },
+                },
+                root: {
+                    keepMounted: true
                 }
             }}
         >
@@ -91,7 +104,11 @@ const MSidebar = ({
                 {/* ------------------------------------------- */}
                 {/* Sidebar Items */}
                 {/* ------------------------------------------- */}
-                <SidebarItems lang={lang} />
+                <SidebarItems
+                    lang={lang}
+                    categoryList={categoryList}
+                    archiveList={archiveList}
+                />
             </Box>
             {/* ------------------------------------------- */}
             {/* Sidebar For Mobile */}

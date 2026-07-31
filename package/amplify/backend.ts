@@ -138,6 +138,7 @@ IsCreateFileRole?.addToPrincipalPolicy(
         actions: [
             'dynamodb:PutItem',
             'dynamodb:Query',
+            'dynamodb:UpdateItem',
         ],
         resources: [
             isSnsTbl.tableArn,

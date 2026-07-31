@@ -6,47 +6,40 @@ import { cookies } from 'next/headers';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
+import dayjs from "dayjs";
 import Prev from "@/app/(DashboardLayout)/components/container/Prev";
 
 interface PageProps {
     params: Promise<{
-        slug: string;
+        year: string;
         lang: string;
     }>;
     searchParams: Promise<{
         token?: string;
     }>;
 }
-export async function generateMetadata({ params, searchParams }: PageProps) {
-    const { slug } = await params;
-    const slugTaxonomy = `${decodeURIComponent(slug)}_category`;
-    const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
-        slugTaxonomy,
-    }, {
-        selectionSet: ["post.thumbnail", "name"]
-    });
+
+export async function generateMetadata({ params }: PageProps) {
+    const { year } = await params;
     return {
-        title: `${data[0]?.name}の魅力を深層まで探る｜アイドル深層`,
-        description: `【${data[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
+        title: `${year}年の記事一覧｜アイドル深層`,
+        description: `${year}年の記事一覧。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
     };
 }
-const Category = async ({ params, taxonomy, searchParams }: any) => {
-    const { slug, lang } = await params;
+const YearArchive = async ({ params, searchParams }: any) => {
+    const { year, lang } = await params;
     const { token } = await searchParams;
-    const slugTaxonomy = `${decodeURIComponent(slug)}_${taxonomy ?? "category"}`;
+    const startYear = dayjs(`${year}-01-01`).startOf('year').toISOString();
+    const endYear = dayjs(`${year}-01-01`).endOf('year').toISOString();
     let nextToken: string | null = null;
     let listData: any = [];
     const selectionSet = [
-        "post.id",
-        "post.slug",
-        "post.title",
-        "post.rewrittenTitle",
-        "post.thumbnail",
-        "post.createdAt",
         "id",
         "slug",
-        "name",
-        "createdAt"
+        "title",
+        "rewrittenTitle",
+        "thumbnail",
+        "createdAt",
     ] as const;
     const listParams = {
         limit: 8,
@@ -54,44 +47,44 @@ const Category = async ({ params, taxonomy, searchParams }: any) => {
         nextToken: token ?? null as string | null,
         sortDirection: "DESC" as const,
     };
+    const pk = {
+        status: "published",
+        createdAt: { between: [startYear, endYear] as [string, string] }
+    };
     do {
-        const { data, nextToken: newNextToken } = await cookiesClient.models.IsPostMeta
-            .listIsPostMetaBySlugTaxonomyAndCreatedAt({ slugTaxonomy }, listParams);
-        const filterData = data.filter(v => v.post != null);
-        listData = [...listData, ...filterData];
+        const { data, nextToken: newNextToken } = await cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt(pk, listParams);
+        listData = [...listData, ...data];
         listParams.nextToken = nextToken = newNextToken ?? "";
         if (!newNextToken || listData.length >= listParams.limit) break;
     } while (true);
-
     const editData: any = [];
     for (const v of listData) {
-        if (!v.post) continue;
+        if (!v) continue;
         const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-            postId: v.post.id
+            postId: v.id
         }, {
             filter: { lang: { eq: lang } },
             selectionSet: ["rewrittenTitle"]
         });
         let imageUrl = "";
-        if (v.post.thumbnail) {
+        if (v.thumbnail) {
             const { url } = await runWithAmplifyServerContext({
                 nextServerContext: { cookies },
                 operation: (contextSpec) => getUrl(contextSpec, {
-                    path: v.post.thumbnail,
+                    path: v.thumbnail,
                     options: { expiresIn: 3600 }
                 })
             });
             imageUrl = url.toString();
-            console.info("imageUrl", imageUrl);
         }
         editData.push({
-            id: v.post.id,
-            slug: v.post.slug,
-            title: v.post.title,
-            rewrittenTitle: translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "",
-            thumbnail: v.post?.thumbnail ?? "",
+            id: v.id,
+            slug: v.slug,
+            title: v.title,
+            rewrittenTitle: translationsData[0]?.rewrittenTitle ?? v?.rewrittenTitle ?? "",
+            thumbnail: v?.thumbnail ?? "",
             imageUrl,
-            createdAt: v.post?.createdAt ?? "",
+            createdAt: v?.createdAt ?? "",
             postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
         });
     }
@@ -101,7 +94,7 @@ const Category = async ({ params, taxonomy, searchParams }: any) => {
                 <Box>
                     <Grid container spacing={3}>
                         <Blog data={editData} lang={lang} />
-                        {!token && <NextPage token={nextToken ?? ""} queryType={"category"} pk={{ slugTaxonomy }} lang={lang} />}
+                        {!token && <NextPage token={nextToken ?? ""} queryType={"date"} pk={pk} lang={lang} />}
                     </Grid>
                     <Grid container justifyContent="space-between">
                         <Grid>
@@ -117,4 +110,4 @@ const Category = async ({ params, taxonomy, searchParams }: any) => {
     );
 };
 
-export default Category;
+export default YearArchive;
