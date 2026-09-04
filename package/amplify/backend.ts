@@ -1,7 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data, IsCreateFile } from './data/resource';
-import { myFirstFunction, myFirstFunctionEnvConfig } from './functions/my-first-function/resource';
+import { myFirstFunction } from './functions/my-first-function/resource';
 import { isSnsFunction } from './functions/is-sns-function/resource';
 import { storage } from './storage/resource';
 import {
@@ -13,7 +13,8 @@ import { createOrderStatusWorkflow } from './workflows/order-status/resource';
 import { createSnsStatsWorkflow } from './workflows/IsSnsStatsWorkflow/resource';
 import { createFileWorkflow } from './workflows/IsCreateFileWorkflow/resource';
 import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
-
+import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
+import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
  */
@@ -25,6 +26,8 @@ export const backend = defineBackend({
     IsCreateFile,
     storage
 });
+
+const NEXT_PUBLIC_CLOUDFRONT_DOMAIN = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN as string;
 
 const externalStack = backend.createStack("MyExternalDataSources");
 const parentStackName = externalStack.nestedStackParent?.stackName ?? externalStack.stackName;
@@ -41,14 +44,23 @@ const IsCommentsTbl = backend.data.resources.tables['IsComments'];
 const IsPostsTranslationsTbl = backend.data.resources.tables['IsPostsTranslations'];
 
 // S3
+const storageStack = backend.storage.resources.bucket.stack;
 const isBucket01 = backend.storage.resources.bucket;
 
 // Lambda
 const lambdaMyFirstFunctionAttrArn = backend.myFirstFunction.resources.cfnResources.cfnFunction.attrArn;
+const IsMyFirstFunctionInstance = backend.myFirstFunction.resources.lambda as LambdaFunction;
+IsMyFirstFunctionInstance.addEnvironment('NEXT_PUBLIC_CLOUDFRONT_DOMAIN', NEXT_PUBLIC_CLOUDFRONT_DOMAIN);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTS', isPostsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTMETA', IsPostMetaTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_TERMS', IsTermsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_COMMENTS', IsCommentsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTS_TRANSLATIONS', IsPostsTranslationsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_SNS', isSnsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('BUCKET_NAME_IS_01', isBucket01.bucketName);
 
 const IsSnsFunctionInstance = backend.isSnsFunction.resources.lambda as LambdaFunction;
 const IsCreateFileInstance = backend.IsCreateFile.resources.lambda as LambdaFunction;
-
 IsCreateFileInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
 IsCreateFileInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
 
@@ -153,3 +165,29 @@ IsCreateFileRole?.addToPrincipalPolicy(
         resources: [`${isBucket01.bucketArn}/*`],
     })
 );
+
+// CloudFront ディストリビューションの作成（OAC方式、public/* のみ配信）
+const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(isBucket01);
+const imageDistribution = new cloudfront.Distribution(storageStack, 'ImageDistribution', {
+    defaultBehavior: {
+        origin: s3Origin,
+        viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+        allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD,
+        cachedMethods: cloudfront.CachedMethods.CACHE_GET_HEAD,
+        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        functionAssociations: [{
+            function: new cloudfront.Function(storageStack, 'PublicPathGuard', {
+                code: cloudfront.FunctionCode.fromInline(`
+                    function handler(event) {
+                        var uri = event.request.uri;
+                        if (!uri.startsWith('/public/')) {
+                            return { statusCode: 403, statusDescription: 'Forbidden' };
+                        }
+                        return event.request;
+                    }
+                `),
+            }),
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
+        }],
+    },
+});

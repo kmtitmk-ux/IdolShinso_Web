@@ -5,8 +5,7 @@ import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
 import Prev from "@/app/(DashboardLayout)/components/container/Prev";
-import { getUrl } from 'aws-amplify/storage/server';
-import { cookies } from 'next/headers';
+
 
 interface PageProps {
     params: Promise<{
@@ -69,17 +68,7 @@ const Dashboard = async ({ params, searchParams }: PageProps) => {
                 return false;
             }
         })[0];
-        let imageUrl = "";
-        if (item.thumbnail) {
-            const { url } = await runWithAmplifyServerContext({
-                nextServerContext: { cookies },
-                operation: (contextSpec) => getUrl(contextSpec, {
-                    path: item.thumbnail!,
-                    options: { expiresIn: 3600 }
-                })
-            });
-            imageUrl = url.toString();
-        }
+        const imageUrl = item.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${item.thumbnail}` : "";
         return {
             id: item.id,
             slug: item.slug,

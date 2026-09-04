@@ -1,12 +1,11 @@
+import * as React from 'react';
+import { notFound } from 'next/navigation';
 import Link from "next/link";
 import { Box, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
-import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
-import { getUrl } from 'aws-amplify/storage/server';
-import { cookies } from 'next/headers';
 import Image from "next/image";
-import outputs from '@/amplify_outputs.json';
+import { cookiesClient } from "@/utils/amplifyServerUtils";
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
@@ -15,7 +14,30 @@ import { post } from "aws-amplify/api";
 // import Link from '@mui/material/Link';
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
-const bucketName01 = outputs?.storage?.bucket_name ?? ""; // package/amplify_outputs.json
+
+const getArticle = React.cache(async (slug: string) => {
+    return cookiesClient.models.IsPosts.listIsPostsBySlug({
+        slug: decodeURIComponent(slug)
+    }, {
+        selectionSet: [
+            "id",
+            "slug",
+            "title",
+            "rewrittenTitle",
+            "thumbnail",
+            "content",
+            "createdAt",
+            "postmeta.id",
+            "postmeta.name",
+            "postmeta.slug",
+            "postmeta.taxonomy",
+            "postsTranslations.lang",
+            "postsTranslations.rewrittenTitle",
+            "postsTranslations.content"
+        ]
+    });
+});
+
 interface PageProps {
     params: Promise<{
         slug: string;
@@ -25,16 +47,8 @@ interface PageProps {
 export async function generateMetadata({ params }: PageProps) {
     const awaitedParams = await params;
     const { lang, slug } = awaitedParams;
-    const { data } = await cookiesClient.models.IsPosts.listIsPostsBySlug({
-        slug: decodeURIComponent(slug)
-    }, {
-        selectionSet: [
-            "id",
-            "title",
-            "rewrittenTitle",
-            "thumbnail"
-        ]
-    });
+    const { data } = await getArticle(slug);
+    if (!data[0]) notFound();
     const id = data[0]?.id as string;
     const siteTitle = lang === "ja" ? "アイドル深層" : lang === "en" ? "Idol Shinsou" : "偶像深層";
     const locale = lang === "ja" ? "ja_JP" : lang === "en" ? "en_US" : "zh-TW";
@@ -65,7 +79,7 @@ export async function generateMetadata({ params }: PageProps) {
             url: `https://geinouwasa.com/posts/${slug}`,
             siteName: siteTitle,
             images: [{
-                url: `https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`,
+                url: `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${thumbnail}`,
                 width: 1200,
                 height: 630,
                 alt: title,
@@ -77,7 +91,7 @@ export async function generateMetadata({ params }: PageProps) {
             card: 'summary_large_image',
             title: title,
             description: description,
-            images: [`https://${bucketName01}.s3.ap-northeast-1.amazonaws.com/${thumbnail}`],
+            images: [`https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${thumbnail}`],
             creator: '@IdolShinso',
         },
     };
@@ -85,26 +99,8 @@ export async function generateMetadata({ params }: PageProps) {
 const SamplePage = async ({ params }: PageProps) => {
     const awaitedParams = await params;
     const { lang, slug } = awaitedParams;
-    const { data: postData } = await cookiesClient.models.IsPosts.listIsPostsBySlug(
-        { slug: decodeURIComponent(slug) },
-        {
-            selectionSet: [
-                "id",
-                "slug",
-                "title",
-                "rewrittenTitle",
-                "thumbnail",
-                "content",
-                "createdAt",
-                "postmeta.id",
-                "postmeta.name",
-                "postmeta.slug",
-                "postmeta.taxonomy",
-                "postsTranslations.lang",
-                "postsTranslations.rewrittenTitle",
-                "postsTranslations.content"
-            ]
-        });
+    const { data: postData } = await getArticle(slug);
+    if (!postData[0]) notFound();
     const postsTranslations = postData[0].postsTranslations.filter((pm) => pm.lang === lang)[0];
     const postId = postData[0]?.id as string;
     const { data: commentsData } = await cookiesClient.models.IsComments.listIsCommentsByPostIdAndCreatedAt(
@@ -116,7 +112,8 @@ const SamplePage = async ({ params }: PageProps) => {
                 "header",
                 "content",
             ]
-        });
+        }
+    );
     const data = { ...postData[0], comments: commentsData ?? [] };
     console.info("fetch data postData:", postData);
     console.info("fetch data commentsData:", commentsData);
@@ -124,14 +121,7 @@ const SamplePage = async ({ params }: PageProps) => {
     const content = postsTranslations?.content || data.content || "";
     let thumbnailUrl = "";
     if (data.thumbnail) {
-        const { url } = await runWithAmplifyServerContext({
-            nextServerContext: { cookies },
-            operation: (contextSpec) => getUrl(contextSpec, {
-                path: data.thumbnail as string,
-                options: { expiresIn: 3600 }
-            })
-        });
-        thumbnailUrl = url.toString();
+        thumbnailUrl = `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${data.thumbnail}`;
     }
     const BreadcrumbSetter = ({ title, category }: { title: string; category: { slug: string; name: string; }; }) => {
         return (
@@ -187,17 +177,7 @@ const SamplePage = async ({ params }: PageProps) => {
             if (!translationsData.length && lang !== "ja") continue;
             ids.push(v.post.id);
             const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
-            let imageUrl = "";
-            if (v.post?.thumbnail) {
-                const { url } = await runWithAmplifyServerContext({
-                    nextServerContext: { cookies },
-                    operation: (contextSpec) => getUrl(contextSpec, {
-                        path: v.post!.thumbnail as string,
-                        options: { expiresIn: 3600 }
-                    })
-                });
-                imageUrl = url.toString();
-            }
+            const imageUrl = v.post?.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
             posts.push({
                 id: v.post.id,
                 slug: v.post.slug,

@@ -35,19 +35,16 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const s3Client = new S3Client({});
 const translateClient = new TranslateClient({});
 
+const NEXT_PUBLIC_CLOUDFRONT_DOMAIN = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN as string;
 const BUCKET_NAME_IS_01 = process.env.BUCKET_NAME_IS_01 as string;
-const TABLE_ID = process.env.TABLE_ID as string;
-const TABLE_NAME_IS_POSTS = `IsPosts-${TABLE_ID}`;
-const TABLE_NAME_IS_POSTMETA = `IsPostMeta-${TABLE_ID}`;
-const TABLE_NAME_IS_TERMS = `IsTerms-${TABLE_ID}`;
-const TABLE_NAME_IS_COMMENTS = `IsComments-${TABLE_ID}`;
-const TABLE_NAME_IS_POSTS_TRANSLATIONS = `IsPostsTranslations-${TABLE_ID}`;
-const TABLE_NAME_IS_SNS = `IsSns-${TABLE_ID}`;
+const TABLE_NAME_IS_POSTS = process.env.TABLE_NAME_IS_POSTS as string;
+const TABLE_NAME_IS_POSTMETA = process.env.TABLE_NAME_IS_POSTMETA as string;
+const TABLE_NAME_IS_TERMS = process.env.TABLE_NAME_IS_TERMS as string;
+const TABLE_NAME_IS_COMMENTS = process.env.TABLE_NAME_IS_COMMENTS as string;
+const TABLE_NAME_IS_POSTS_TRANSLATIONS = process.env.TABLE_NAME_IS_POSTS_TRANSLATIONS as string;
+const TABLE_NAME_IS_SNS = process.env.TABLE_NAME_IS_SNS as string;
 const MAX_BATCH_SIZE = 25;
 
-// type IS_POSTS_INPUT = Pick<Schema['IsPosts']['type'], 'id' | 'title' | 'slug' | 'createdAt' | 'rewrittenTitle' | 'thumbnail' | 'updatedAt'> & { __typename: 'IsPosts'; };
-// type IS_POSTMETA_INPUT = Pick<Schema['IsPostMeta']['type'], 'id' | 'postId' | 'name' | 'slug' | 'createdAt' | 'updatedAt'> & { __typename: 'IsPostMeta'; };
-// type IS_TERMS_INPUT = Pick<Schema['IsTerms']['type'], 'id' | 'name' | 'slug' | 'taxonomy' | 'createdAt' | 'updatedAt'> & { __typename: 'IsTerms'; };
 type IS_COMMENTS_INPUT = Pick<Schema['IsComments']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsComments'; };
 type IS_COMMENTS_TRANSLATIONS_INPUT = Pick<Schema['IsCommentsTranslations']['type'], 'id' | 'postId' | 'createdAt' | 'updatedAt'> & { __typename: 'IsCommentsTranslations'; };
 type OutputResult = {
@@ -455,7 +452,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
             const imgSrc = $(el).find('img').attr('src') as string;
             if (imgSrc) {
                 const imageRes = await getImage(imgSrc, createdAt);
-                content = content.replace(new RegExp(imgSrc, 'g'), `https://${BUCKET_NAME_IS_01}.s3.amazonaws.com/${imageRes.Key}`);
+                content = content.replace(new RegExp(imgSrc, 'g'), `https://${NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${imageRes.Key}`);
             }
         }
         if (!content?.includes("スポンサーリンク")) {

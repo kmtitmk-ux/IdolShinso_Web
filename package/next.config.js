@@ -1,7 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   reactStrictMode: true,
-  images: { unoptimized: true } 
+  images: {
+    remotePatterns: [
+      {
+        protocol: 'https',
+        hostname: '*.cloudfront.net',
+        pathname: '/**',
+      },
+    ],
+  },
 };
 
-module.exports = nextConfig;
+export default nextConfig;

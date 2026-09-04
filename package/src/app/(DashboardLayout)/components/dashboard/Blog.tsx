@@ -19,7 +19,6 @@ import { IconBasket } from "@tabler/icons-react";
 import BlankCard from "@/app/(DashboardLayout)/components/shared/BlankCard";
 import Image from "next/image";
 import dayjs from 'dayjs';
-import outputs from '@/amplify_outputs.json';
 
 const Blog = ({
     data,
@@ -56,7 +55,7 @@ const Blog = ({
                                             src={product.imageUrl}
                                             alt={product?.rewrittenTitle || product?.title || "thumbnail"}
                                             fill
-                                            style={{ objectFit: "cover" }}
+                                            style={{ objectFit: 'cover' }}
                                         />
                                     )}
                                 </div>

@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Grid, Box, Button } from "@mui/material";
 import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
-import { getUrl } from 'aws-amplify/storage/server';
-import { cookies } from 'next/headers';
+
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
@@ -66,17 +65,7 @@ const YearArchive = async ({ params, searchParams }: any) => {
             filter: { lang: { eq: lang } },
             selectionSet: ["rewrittenTitle"]
         });
-        let imageUrl = "";
-        if (v.thumbnail) {
-            const { url } = await runWithAmplifyServerContext({
-                nextServerContext: { cookies },
-                operation: (contextSpec) => getUrl(contextSpec, {
-                    path: v.thumbnail,
-                    options: { expiresIn: 3600 }
-                })
-            });
-            imageUrl = url.toString();
-        }
+        const imageUrl = v.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.thumbnail}` : "";
         editData.push({
             id: v.id,
             slug: v.slug,

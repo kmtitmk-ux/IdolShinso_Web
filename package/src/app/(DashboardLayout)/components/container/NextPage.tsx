@@ -11,7 +11,6 @@ import {
     Container,
 } from "@mui/material";
 import { generateClient } from 'aws-amplify/data';
-import { getUrl } from 'aws-amplify/storage';
 
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import type { Schema } from '@/amplify/data/resource';
@@ -55,6 +54,7 @@ const NextPage = ({
         return () => {
             if (currentLoader) observer.unobserve(currentLoader);
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [nextToken]);
 
     const fetchData = async () => {
@@ -97,11 +97,7 @@ const NextPage = ({
                                 return false;
                             }
                         })[0];
-                        let imageUrl = "";
-                        if (item.thumbnail) {
-                            const { url } = await getUrl({ path: item.thumbnail });
-                            imageUrl = url.toString();
-                        }
+                        const imageUrl = item.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${item.thumbnail}` : "";
                         return {
                             id: item.id,
                             slug: item.slug,
@@ -161,11 +157,7 @@ const NextPage = ({
                                 return false;
                             }
                         })[0];
-                        let imageUrl = "";
-                        if (v.post?.thumbnail) {
-                            const { url } = await getUrl({ path: v.post.thumbnail });
-                            imageUrl = url.toString();
-                        }
+                        const imageUrl = v.post?.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
                         editData.push({
                             id: v.post.id,
                             slug: v.post.slug,
@@ -210,11 +202,7 @@ const NextPage = ({
                                 return false;
                             }
                         })[0];
-                        let imageUrl = "";
-                        if (item.thumbnail) {
-                            const { url } = await getUrl({ path: item.thumbnail });
-                            imageUrl = url.toString();
-                        }
+                        const imageUrl = item.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${item.thumbnail}` : "";
                         return {
                             id: item.id,
                             slug: item.slug,

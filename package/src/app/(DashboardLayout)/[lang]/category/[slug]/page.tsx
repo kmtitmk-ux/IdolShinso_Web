@@ -1,8 +1,7 @@
 import Link from "next/link";
 import { Grid, Box, Button } from "@mui/material";
 import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
-import { getUrl } from 'aws-amplify/storage/server';
-import { cookies } from 'next/headers';
+
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
@@ -72,18 +71,7 @@ const Category = async ({ params, taxonomy, searchParams }: any) => {
             filter: { lang: { eq: lang } },
             selectionSet: ["rewrittenTitle"]
         });
-        let imageUrl = "";
-        if (v.post.thumbnail) {
-            const { url } = await runWithAmplifyServerContext({
-                nextServerContext: { cookies },
-                operation: (contextSpec) => getUrl(contextSpec, {
-                    path: v.post.thumbnail,
-                    options: { expiresIn: 3600 }
-                })
-            });
-            imageUrl = url.toString();
-            console.info("imageUrl", imageUrl);
-        }
+        const imageUrl = v.post.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
         editData.push({
             id: v.post.id,
             slug: v.post.slug,
