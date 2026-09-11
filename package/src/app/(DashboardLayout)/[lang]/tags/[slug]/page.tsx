@@ -1,4 +1,5 @@
-import Category, { getFirstPage } from "@/app/(DashboardLayout)/[lang]/category/[slug]/page";
+import Category from "@/app/(DashboardLayout)/[lang]/category/[slug]/page";
+import { getFirstPage } from "@/utils/categoryQuery";
 
 interface PageProps {
     params: Promise<{
