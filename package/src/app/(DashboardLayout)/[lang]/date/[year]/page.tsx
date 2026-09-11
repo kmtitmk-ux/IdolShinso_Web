@@ -1,6 +1,8 @@
 import Link from "next/link";
 import { Grid, Box, Button } from "@mui/material";
-import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
+import { getPostsByDateRange, getTranslations } from "@/utils/cachedQueries";
+
+export const revalidate = 60;
 
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
@@ -30,42 +32,10 @@ const YearArchive = async ({ params, searchParams }: any) => {
     const { token } = await searchParams;
     const startYear = dayjs(`${year}-01-01`).startOf('year').toISOString();
     const endYear = dayjs(`${year}-01-01`).endOf('year').toISOString();
-    let nextToken: string | null = null;
-    let listData: any = [];
-    const selectionSet = [
-        "id",
-        "slug",
-        "title",
-        "rewrittenTitle",
-        "thumbnail",
-        "createdAt",
-    ] as const;
-    const listParams = {
-        limit: 8,
-        selectionSet,
-        nextToken: token ?? null as string | null,
-        sortDirection: "DESC" as const,
-    };
-    const pk = {
-        status: "published",
-        createdAt: { between: [startYear, endYear] as [string, string] }
-    };
-    do {
-        const { data, nextToken: newNextToken } = await cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt(pk, listParams);
-        listData = [...listData, ...data];
-        listParams.nextToken = nextToken = newNextToken ?? "";
-        if (!newNextToken || listData.length >= listParams.limit) break;
-    } while (true);
+    const { listData, nextToken, pk } = await getPostsByDateRange(startYear, endYear, token ?? null);
     const translationsResults = lang === "ja"
         ? listData.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
-        : await Promise.all(
-            listData.map((v: any) =>
-                cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
-                    { postId: v.id },
-                    { filter: { lang: { eq: lang } }, selectionSet: ["rewrittenTitle"] }
-                )
-            )
-        );
+        : await getTranslations(listData.map((v: any) => v.id), lang);
     const editData = listData.map((v: any, i: number) => {
         const imageUrl = v.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.thumbnail}` : "";
         return {

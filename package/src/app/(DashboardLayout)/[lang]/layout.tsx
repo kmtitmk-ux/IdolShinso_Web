@@ -3,7 +3,7 @@ import { Container, Box } from "@mui/material";
 import ClientLayout from "@/src/app/(DashboardLayout)/ClientLayout";
 import ClientThemeProvider from "@/app/ClientThemeProvider";
 import Script from 'next/script';
-import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
+import { getCategoryList, getArchiveRange } from "@/utils/cachedQueries";
 
 export default async function RootLayout({
     children,
@@ -15,39 +15,9 @@ export default async function RootLayout({
     const awaitedParams = await params;
     const { lang } = awaitedParams;
 
-    const fetchCategoryData = async () => {
-        const selectionSet = ["id", "slug", "name"] as const;
-        const listParams = { limit: 10, selectionSet };
-        const { data, errors } = await cookiesClient.models.IsTerms.listIsTermsByTaxonomy({ taxonomy: "category" }, listParams);
-        if (errors) {
-            console.error("Error fetching category data:", errors);
-            return;
-        }
-        return data;
-    };
+    const fetchCategoryData = () => getCategoryList();
 
-    const fetchArchiveData = async () => {
-        const selectionSet = ["createdAt"] as const;
-        const listParams = { limit: 1, selectionSet };
-        const [
-            { data: latestData, errors: latestErrors },
-            { data: oldestData, errors: oldestErrors }
-        ] = await Promise.all([
-            cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt(
-                { status: "published" },
-                { ...listParams, sortDirection: "DESC" }
-            ),
-            cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt(
-                { status: "published" },
-                listParams
-            )
-        ]);
-        if (latestErrors || oldestErrors) {
-            console.error("Error fetching archive data:", latestErrors || oldestErrors);
-            return;
-        }
-        return [latestData, oldestData];
-    };
+    const fetchArchiveData = () => getArchiveRange();
     return (
         <>
             <html lang={lang} suppressHydrationWarning>

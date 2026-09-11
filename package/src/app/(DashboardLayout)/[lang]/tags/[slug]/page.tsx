@@ -1,6 +1,8 @@
 import Category from "@/app/(DashboardLayout)/[lang]/category/[slug]/page";
 import { getFirstPage } from "@/utils/categoryQuery";
 
+export const revalidate = 60;
+
 interface PageProps {
     params: Promise<{
         slug: string;

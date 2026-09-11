@@ -1,46 +1,18 @@
-import * as React from 'react';
 import { notFound } from 'next/navigation';
 import Link from "next/link";
 import { Box, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
 import Image from "next/image";
-import { cookiesClient } from "@/utils/amplifyServerUtils";
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
-import { post } from "aws-amplify/api";
-// import from '@mui/material/Breadcrumbs';
-// import Link from '@mui/material/Link';
+import { getArticle, getRelatedPosts, getTranslations } from "@/utils/cachedQueries";
+
+export const revalidate = 60;
+
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
-
-const getArticle = React.cache(async (slug: string) => {
-    return cookiesClient.models.IsPosts.listIsPostsBySlug({
-        slug: decodeURIComponent(slug)
-    }, {
-        selectionSet: [
-            "id",
-            "slug",
-            "title",
-            "rewrittenTitle",
-            "thumbnail",
-            "content",
-            "createdAt",
-            "postmeta.id",
-            "postmeta.name",
-            "postmeta.slug",
-            "postmeta.taxonomy",
-            "postsTranslations.lang",
-            "postsTranslations.rewrittenTitle",
-            "postsTranslations.content",
-            "comments.id",
-            "comments.createdAt",
-            "comments.header",
-            "comments.content",
-        ]
-    });
-});
 
 interface PageProps {
     params: Promise<{
@@ -120,19 +92,8 @@ const SamplePage = async ({ params }: PageProps) => {
         );
     };
     const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
-    const postmetaResults = await Promise.all(
-        data.postmeta.map(term =>
-            cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
-                { slugTaxonomy: `${term.slug}_${term.taxonomy}` },
-                {
-                    selectionSet: [
-                        "id", "slug", "name",
-                        "post.id", "post.slug", "post.title", "post.rewrittenTitle",
-                        "post.thumbnail", "post.content", "post.createdAt",
-                    ]
-                }
-            )
-        )
+    const postmetaResults = await getRelatedPosts(
+        data.postmeta.map(term => `${term.slug}_${term.taxonomy}`)
     );
     const allPostmeta = postmetaResults.flatMap(r => r.data);
     const uniquePosts = allPostmeta.reduce<typeof allPostmeta>((acc, v) => {
@@ -141,14 +102,7 @@ const SamplePage = async ({ params }: PageProps) => {
     }, []);
     const translationsResults = lang === "ja"
         ? uniquePosts.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
-        : await Promise.all(
-            uniquePosts.map(v =>
-                cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
-                    { postId: v.post!.id },
-                    { filter: { lang: { eq: lang } }, selectionSet: ["rewrittenTitle"] }
-                )
-            )
-        );
+        : await getTranslations(uniquePosts.map(v => v.post!.id), lang);
     const posts = uniquePosts.reduce<any[]>((acc, v, i) => {
         const translationsData = translationsResults[i].data;
         if (!translationsData.length && lang !== "ja") return acc;

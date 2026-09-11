@@ -1,5 +1,5 @@
-import * as React from 'react';
-import { cookiesClient } from '@/utils/amplifyServerUtils';
+import { unstable_cache } from 'next/cache';
+import { publicClient } from '@/utils/amplifyPublicClient';
 
 const selectionSet = [
     "post.id",
@@ -14,7 +14,7 @@ const selectionSet = [
     "createdAt"
 ] as const;
 
-export const getFirstPage = React.cache(async (slugTaxonomy: string, token: string | null) => {
+export const getFirstPage = unstable_cache(async (slugTaxonomy: string, token: string | null) => {
     const listParams = {
         limit: 8,
         selectionSet,
@@ -24,12 +24,13 @@ export const getFirstPage = React.cache(async (slugTaxonomy: string, token: stri
     let listData: any = [];
     let nextToken: string | null = null;
     do {
-        const { data, nextToken: newNextToken } = await cookiesClient.models.IsPostMeta
+        const { data, nextToken: newNextToken } = await publicClient.models.IsPostMeta
             .listIsPostMetaBySlugTaxonomyAndCreatedAt({ slugTaxonomy }, listParams);
         const filterData = data.filter((v: any) => v.post != null);
         listData = [...listData, ...filterData];
         listParams.nextToken = nextToken = newNextToken ?? "";
         if (!newNextToken || listData.length >= listParams.limit) break;
+
     } while (true);
     return { listData, nextToken };
-});
+}, ['getFirstPage'], { revalidate: 60 });

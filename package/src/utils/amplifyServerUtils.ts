@@ -9,6 +9,8 @@ export const cookiesClient = generateServerClientUsingCookies<Schema>({
     cookies
 });
 
+export const staticClient = cookiesClient;
+
 export const { runWithAmplifyServerContext } = createServerRunner({
     config: outputs
 });

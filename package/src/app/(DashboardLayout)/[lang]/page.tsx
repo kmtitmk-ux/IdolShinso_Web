@@ -3,8 +3,10 @@ import { Grid, Box, Button } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
-import { cookiesClient, runWithAmplifyServerContext } from "@/utils/amplifyServerUtils";
 import Prev from "@/app/(DashboardLayout)/components/container/Prev";
+import { getPostsByStatus } from "@/utils/cachedQueries";
+
+export const revalidate = 60;
 
 
 interface PageProps {
@@ -35,27 +37,7 @@ const Dashboard = async ({ params, searchParams }: PageProps) => {
     const awaitedParams = await params;
     const { lang } = awaitedParams;
     const { token } = await searchParams;
-    const { data, nextToken, errors } = await cookiesClient.models.IsPosts.listIsPostsByStatusAndCreatedAt({
-        status: "published"
-    }, {
-        nextToken: token,
-        sortDirection: "DESC",
-        limit: 8,
-        selectionSet: [
-            "id",
-            "slug",
-            "title",
-            "rewrittenTitle",
-            "thumbnail",
-            "createdAt",
-            "postmeta.id",
-            "postmeta.slug",
-            "postmeta.name",
-            "postmeta.taxonomy",
-            "postsTranslations.lang",
-            "postsTranslations.rewrittenTitle"
-        ],
-    });
+    const { data, nextToken, errors } = await getPostsByStatus(token ?? null);
     if (errors) {
         console.error(errors);
         return;

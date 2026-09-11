@@ -44,7 +44,7 @@ const schema = a.schema({
             index('status').sortKeys(['createdAt']),
             index('status').sortKeys(['updatedAt'])
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsPostMeta: a
         .model({
             createdAt: a.datetime().required(),
@@ -58,7 +58,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('slugTaxonomy').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsTerms: a
         .model({
             ...IsTerms,
@@ -70,7 +70,7 @@ const schema = a.schema({
             index('slug'),
             index('taxonomy')
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsComments: a
         .model({
             ...IsComments,
@@ -78,7 +78,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsPostsTranslations: a
         .model({
             ...IsPosts,
@@ -89,7 +89,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId')
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsTermsTranslations: a
         .model({
             ...IsTerms,
@@ -100,7 +100,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('lang')
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsCommentsTranslations: a
         .model({
             ...IsComments,
@@ -109,7 +109,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
     IsSns: a
         .model({
             contentText: a.string(),
@@ -130,7 +130,7 @@ const schema = a.schema({
             index('platform').sortKeys(['updatedAt']),
             index('platform').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.guest()]),
+        .authorization((allow) => [allow.guest().to(['read'])]),
 });
 
 export type Schema = ClientSchema<typeof schema>;

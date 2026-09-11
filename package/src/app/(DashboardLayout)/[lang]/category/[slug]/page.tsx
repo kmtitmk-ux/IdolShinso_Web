@@ -1,7 +1,9 @@
 import Link from "next/link";
 import { Grid, Box, Button } from "@mui/material";
-import { cookiesClient } from "@/utils/amplifyServerUtils";
 import { getFirstPage } from "@/utils/categoryQuery";
+import { getTranslations } from "@/utils/cachedQueries";
+
+export const revalidate = 60;
 
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import NextPage from '@/app/(DashboardLayout)/components/container/NextPage';
@@ -36,14 +38,7 @@ const Category = async ({ params, taxonomy, searchParams }: any) => {
 
     const translationsResults = lang === "ja"
         ? listData.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
-        : await Promise.all(
-            listData.map((v: any) =>
-                cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
-                    { postId: v.post.id },
-                    { filter: { lang: { eq: lang } }, selectionSet: ["rewrittenTitle"] }
-                )
-            )
-        );
+        : await getTranslations(listData.map((v: any) => v.post.id), lang);
     const editData = listData.map((v: any, i: number) => {
         const imageUrl = v.post.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
         return {
