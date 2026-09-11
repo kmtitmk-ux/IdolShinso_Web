@@ -2,14 +2,15 @@
 const nextConfig = {
   reactStrictMode: true,
   images: {
+    unoptimized: true,
     remotePatterns: [
       {
         protocol: 'https',
         hostname: '*.cloudfront.net',
         pathname: '/**',
-      },
-    ],
-  },
+      }
+    ]
+  }
 };
 
-export default nextConfig;
+module.exports = nextConfig;

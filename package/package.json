@@ -28,7 +28,7 @@
     "aws-amplify": "^6.15.5",
     "dayjs": "^1.11.13",
     "dompurify": "^3.2.6",
-    "eslint": "8.46.0",
+    "eslint": "^8.57.0",
     "eslint-config-next": "^15.1.7",
     "isomorphic-dompurify": "^2.26.0",
     "jsdom": "^26.1.0",

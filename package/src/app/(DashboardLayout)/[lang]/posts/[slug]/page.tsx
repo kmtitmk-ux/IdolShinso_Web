@@ -33,7 +33,11 @@ const getArticle = React.cache(async (slug: string) => {
             "postmeta.taxonomy",
             "postsTranslations.lang",
             "postsTranslations.rewrittenTitle",
-            "postsTranslations.content"
+            "postsTranslations.content",
+            "comments.id",
+            "comments.createdAt",
+            "comments.header",
+            "comments.content",
         ]
     });
 });
@@ -49,27 +53,12 @@ export async function generateMetadata({ params }: PageProps) {
     const { lang, slug } = awaitedParams;
     const { data } = await getArticle(slug);
     if (!data[0]) notFound();
-    const id = data[0]?.id as string;
     const siteTitle = lang === "ja" ? "アイドル深層" : lang === "en" ? "Idol Shinsou" : "偶像深層";
     const locale = lang === "ja" ? "ja_JP" : lang === "en" ? "en_US" : "zh-TW";
     const thumbnail = data[0].thumbnail;
-    let title = data[0].rewrittenTitle || data[0].title;
-    let description = data[0].rewrittenTitle || data[0].title;
-    if (lang !== "ja") {
-        const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
-            { postId: id },
-            {
-                filter: { lang: { eq: lang } },
-                selectionSet: [
-                    "id",
-                    "rewrittenTitle",
-                    "content",
-                ]
-            }
-        );
-        title = translationsData[0]?.rewrittenTitle || title;
-        description = translationsData[0]?.rewrittenTitle || description;
-    }
+    const translation = data[0].postsTranslations.find(t => t.lang === lang);
+    let title = translation?.rewrittenTitle || data[0].rewrittenTitle || data[0].title;
+    let description = title;
     return {
         title: `${title} | ${siteTitle}`,
         description: `${description}。${siteTitle}`,
@@ -102,21 +91,7 @@ const SamplePage = async ({ params }: PageProps) => {
     const { data: postData } = await getArticle(slug);
     if (!postData[0]) notFound();
     const postsTranslations = postData[0].postsTranslations.filter((pm) => pm.lang === lang)[0];
-    const postId = postData[0]?.id as string;
-    const { data: commentsData } = await cookiesClient.models.IsComments.listIsCommentsByPostIdAndCreatedAt(
-        { postId },
-        {
-            selectionSet: [
-                "id",
-                "createdAt",
-                "header",
-                "content",
-            ]
-        }
-    );
-    const data = { ...postData[0], comments: commentsData ?? [] };
-    console.info("fetch data postData:", postData);
-    console.info("fetch data commentsData:", commentsData);
+    const data = { ...postData[0], comments: postData[0].comments ?? [] };
     const title = postsTranslations?.rewrittenTitle || data.rewrittenTitle || "";
     const content = postsTranslations?.content || data.content || "";
     let thumbnailUrl = "";
@@ -144,56 +119,52 @@ const SamplePage = async ({ params }: PageProps) => {
             </Breadcrumbs>
         );
     };
-    let posts: any = [];
     const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
-    const ids: string[] = [];
-    for (const term of data.postmeta) {
-        const slugTaxonomy = `${term.slug}_${term.taxonomy}`;
-        const { data: postmetaData } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
-            { slugTaxonomy },
-            {
-                selectionSet: [
-                    "id",
-                    "slug",
-                    "name",
-                    "post.id",
-                    "post.slug",
-                    "post.title",
-                    "post.rewrittenTitle",
-                    "post.thumbnail",
-                    "post.content",
-                    "post.createdAt",
-                ]
-            }
+    const postmetaResults = await Promise.all(
+        data.postmeta.map(term =>
+            cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
+                { slugTaxonomy: `${term.slug}_${term.taxonomy}` },
+                {
+                    selectionSet: [
+                        "id", "slug", "name",
+                        "post.id", "post.slug", "post.title", "post.rewrittenTitle",
+                        "post.thumbnail", "post.content", "post.createdAt",
+                    ]
+                }
+            )
+        )
+    );
+    const allPostmeta = postmetaResults.flatMap(r => r.data);
+    const uniquePosts = allPostmeta.reduce<typeof allPostmeta>((acc, v) => {
+        if (!v.post || acc.some(a => a.post?.id === v.post!.id) || acc.length >= 8) return acc;
+        return [...acc, v];
+    }, []);
+    const translationsResults = lang === "ja"
+        ? uniquePosts.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
+        : await Promise.all(
+            uniquePosts.map(v =>
+                cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
+                    { postId: v.post!.id },
+                    { filter: { lang: { eq: lang } }, selectionSet: ["rewrittenTitle"] }
+                )
+            )
         );
-        for (const v of postmetaData) {
-            if (!v.post || ids.includes(v.post.id) || ids.length >= 8) continue;
-            const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-                postId: v.post.id
-            }, {
-                filter: { lang: { eq: lang } },
-                selectionSet: ["rewrittenTitle"]
-            });
-            if (!translationsData.length && lang !== "ja") continue;
-            ids.push(v.post.id);
-            const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
-            const imageUrl = v.post?.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
-            posts.push({
-                id: v.post.id,
-                slug: v.post.slug,
-                title: v.post.title,
-                rewrittenTitle: title,
-                thumbnail: v.post?.thumbnail ?? "",
-                imageUrl,
-                createdAt: v.post?.createdAt ?? "",
-                postmeta: [{
-                    id: v?.id ?? "",
-                    slug: v.slug,
-                    name: v.name
-                }]
-            });
-        }
-    };
+    const posts = uniquePosts.reduce<any[]>((acc, v, i) => {
+        const translationsData = translationsResults[i].data;
+        if (!translationsData.length && lang !== "ja") return acc;
+        const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
+        const imageUrl = v.post?.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.post.thumbnail}` : "";
+        return [...acc, {
+            id: v.post!.id,
+            slug: v.post!.slug,
+            title: v.post!.title,
+            rewrittenTitle: title,
+            thumbnail: v.post?.thumbnail ?? "",
+            imageUrl,
+            createdAt: v.post?.createdAt ?? "",
+            postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
+        }];
+    }, []);
     return (
         <PageContainer
             title={title}

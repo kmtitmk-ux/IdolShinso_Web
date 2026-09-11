@@ -59,27 +59,29 @@ const MonthArchive = async ({ params, searchParams }: any) => {
         if (!newNextToken || listData.length >= listParams.limit) break;
     } while (true);
 
-    const editData: any = [];
-    for (const v of listData) {
-        if (!v.id) continue;
-        const { data: translationsData } = await cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId({
-            postId: v.id
-        }, {
-            filter: { lang: { eq: lang } },
-            selectionSet: ["rewrittenTitle"]
-        });
+    const translationsResults = lang === "ja"
+        ? listData.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
+        : await Promise.all(
+            listData.map((v: any) =>
+                cookiesClient.models.IsPostsTranslations.listIsPostsTranslationsByPostId(
+                    { postId: v.id },
+                    { filter: { lang: { eq: lang } }, selectionSet: ["rewrittenTitle"] }
+                )
+            )
+        );
+    const editData = listData.map((v: any, i: number) => {
         const imageUrl = v.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${v.thumbnail}` : "";
-        editData.push({
+        return {
             id: v.id,
             slug: v.slug,
             title: v.title,
-            rewrittenTitle: translationsData[0]?.rewrittenTitle ?? v?.rewrittenTitle ?? "",
+            rewrittenTitle: translationsResults[i].data[0]?.rewrittenTitle ?? v?.rewrittenTitle ?? "",
             thumbnail: v?.thumbnail ?? "",
             imageUrl,
             createdAt: v?.createdAt ?? "",
             postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
-        });
-    }
+        };
+    });
     return (
         <>
             <PageContainer title={listData[0]?.name ?? ""} description="">

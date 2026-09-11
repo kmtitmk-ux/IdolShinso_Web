@@ -1,5 +1,4 @@
-import Category from "@/app/(DashboardLayout)/[lang]/category/[slug]/page";
-import { cookiesClient } from "@/utils/amplifyServerUtils";
+import Category, { getFirstPage } from "@/app/(DashboardLayout)/[lang]/category/[slug]/page";
 
 interface PageProps {
     params: Promise<{
@@ -10,20 +9,14 @@ interface PageProps {
         token?: string;
     }>;
 }
-export async function generateMetadata({ params }: PageProps) {
-    const { slug, lang } = await params;
+export async function generateMetadata({ params, searchParams }: PageProps) {
+    const { slug } = await params;
+    const { token } = await searchParams;
     const slugTaxonomy = `${decodeURIComponent(slug)}_tags`;
-    const { data } = await cookiesClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt({
-        slugTaxonomy,
-    }, {
-        selectionSet: [
-            "post.thumbnail",
-            "name"
-        ]
-    });
+    const { listData } = await getFirstPage(slugTaxonomy, token ?? null);
     return {
-        title: `${data[0]?.name}の魅力を深層まで探る｜アイドル深層`,
-        description: `【${data[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
+        title: `${listData[0]?.name}の魅力を深層まで探る｜アイドル深層`,
+        description: `【${listData[0]?.name}】の魅力をもっと深く知りたいあなたへ。最新ニュース、ライブレポート、メンバーインタビューまで網羅した記事一覧を「アイドル深層」で公開中。今すぐチェックして、推し活をもっと濃くしよう。`
     };
 }
 const Tag = async ({ params, searchParams }: PageProps) => {
