@@ -2,7 +2,7 @@ import { defineBackend } from '@aws-amplify/backend';
 import { auth } from './auth/resource';
 import { data, IsCreateFile } from './data/resource';
 import { myFirstFunction } from './functions/my-first-function/resource';
-import { isSnsFunction } from './functions/is-sns-function/resource';
+import { IsSocialProcessor } from './functions/IsSocialProcessor/resource';
 import { storage } from './storage/resource';
 import {
     Effect,
@@ -22,7 +22,7 @@ export const backend = defineBackend({
     auth,
     data,
     myFirstFunction,
-    isSnsFunction,
+    IsSocialProcessor,
     IsCreateFile,
     storage
 });
@@ -38,10 +38,10 @@ const env = parentStackName.includes("main") ? "main"
 // DynamoDB
 const isPostsTbl = backend.data.resources.tables['IsPosts'];
 const isSnsTbl = backend.data.resources.tables['IsSns'];
-const IsPostMetaTbl = backend.data.resources.tables['IsPostMeta'];
-const IsTermsTbl = backend.data.resources.tables['IsTerms'];
-const IsCommentsTbl = backend.data.resources.tables['IsComments'];
-const IsPostsTranslationsTbl = backend.data.resources.tables['IsPostsTranslations'];
+const isPostMetaTbl = backend.data.resources.tables['IsPostMeta'];
+const isTermsTbl = backend.data.resources.tables['IsTerms'];
+const isCommentsTbl = backend.data.resources.tables['IsComments'];
+const isPostsTranslationsTbl = backend.data.resources.tables['IsPostsTranslations'];
 
 // S3
 const storageStack = backend.storage.resources.bucket.stack;
@@ -52,27 +52,34 @@ const lambdaMyFirstFunctionAttrArn = backend.myFirstFunction.resources.cfnResour
 const IsMyFirstFunctionInstance = backend.myFirstFunction.resources.lambda as LambdaFunction;
 IsMyFirstFunctionInstance.addEnvironment('NEXT_PUBLIC_CLOUDFRONT_DOMAIN', NEXT_PUBLIC_CLOUDFRONT_DOMAIN);
 IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTS', isPostsTbl.tableName);
-IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTMETA', IsPostMetaTbl.tableName);
-IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_TERMS', IsTermsTbl.tableName);
-IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_COMMENTS', IsCommentsTbl.tableName);
-IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTS_TRANSLATIONS', IsPostsTranslationsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTMETA', isPostMetaTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_TERMS', isTermsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_COMMENTS', isCommentsTbl.tableName);
+IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_POSTS_TRANSLATIONS', isPostsTranslationsTbl.tableName);
 IsMyFirstFunctionInstance.addEnvironment('TABLE_NAME_IS_SNS', isSnsTbl.tableName);
 IsMyFirstFunctionInstance.addEnvironment('BUCKET_NAME_IS_01', isBucket01.bucketName);
 
-const IsSnsFunctionInstance = backend.isSnsFunction.resources.lambda as LambdaFunction;
+const IsSocialProcessorInstance = backend.IsSocialProcessor.resources.lambda as LambdaFunction;
+IsSocialProcessorInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
+IsSocialProcessorInstance.addEnvironment('TABLE_NAME_POSTS', isPostsTbl.tableName);
+IsSocialProcessorInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
+IsSocialProcessorInstance.addEnvironment('GOOGLE_SPREADSHEET_ID_SNS', "1nJ0RW0CadVS6P_fqAv4Psu9k1vwPIGe8Eou5iwfaYuA");
+isSnsTbl.grantReadWriteData(IsSocialProcessorInstance);
+
 const IsCreateFileInstance = backend.IsCreateFile.resources.lambda as LambdaFunction;
 IsCreateFileInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
+IsCreateFileInstance.addEnvironment('TABLE_NAME_POSTS', isPostsTbl.tableName);
 IsCreateFileInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
 
 // is-random-sns
-const { eventBusForStepFunc } = createIsRandomSnsWorkflow(externalStack, backend.isSnsFunction.resources.lambda);
+const { eventBusForStepFunc } = createIsRandomSnsWorkflow(externalStack, backend.IsSocialProcessor.resources.lambda);
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSourceForStepFunc", eventBusForStepFunc);
 
 // order-status
 const { eventBus } = createOrderStatusWorkflow(externalStack, lambdaMyFirstFunctionAttrArn);
 backend.data.addEventBridgeDataSource("MyEventBridgeDataSource", eventBus);
 
-createSnsStatsWorkflow(externalStack, { IsSnsFunctionInstance }, env);
+createSnsStatsWorkflow(externalStack, { IsSocialProcessorInstance }, env);
 createFileWorkflow(externalStack, { IsCreateFileInstance }, env);
 
 /**
@@ -91,13 +98,13 @@ myFirstFunctionRole?.addToPrincipalPolicy(
         resources: [
             isPostsTbl.tableArn,
             `${isPostsTbl.tableArn}/index/*`,
-            IsPostMetaTbl.tableArn,
-            IsTermsTbl.tableArn,
-            `${IsTermsTbl.tableArn}/index/*`,
-            IsCommentsTbl.tableArn,
+            isPostMetaTbl.tableArn,
+            isTermsTbl.tableArn,
+            `${isTermsTbl.tableArn}/index/*`,
+            isCommentsTbl.tableArn,
             isSnsTbl.tableArn,
-            IsPostsTranslationsTbl.tableArn,
-            `${IsPostsTranslationsTbl.tableArn}/index/*`,
+            isPostsTranslationsTbl.tableArn,
+            `${isPostsTranslationsTbl.tableArn}/index/*`,
         ]
     })
 );
@@ -124,8 +131,8 @@ myFirstFunctionRole?.addToPrincipalPolicy(
     })
 );
 
-const isSnsFunctionRole = backend.isSnsFunction.resources.lambda.role;
-isSnsFunctionRole?.addToPrincipalPolicy(
+const IsSocialProcessorRole = backend.IsSocialProcessor.resources.lambda.role;
+IsSocialProcessorRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: [
@@ -187,7 +194,7 @@ const imageDistribution = new cloudfront.Distribution(storageStack, 'ImageDistri
                     }
                 `),
             }),
-            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST,
-        }],
-    },
+            eventType: cloudfront.FunctionEventType.VIEWER_REQUEST
+        }]
+    }
 });

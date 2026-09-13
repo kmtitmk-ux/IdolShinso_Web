@@ -168,15 +168,15 @@ export const handler: Handler = async (event: any) => {
                                     Item: {
                                         id: uuidv4(),
                                         contentText: article.TEXT,
-                                        createdAt: date,
                                         engagementRate: 0,
                                         lang: "ja",
-                                        postId: article.id,
                                         platform: "threads",
+                                        postId: article.id,
                                         snsPostId: "",
                                         status: "scheduled",
-                                        updatedAt: date,
-                                        __typename: "IsSns"
+                                        type: "post",
+                                        createdAt: date,
+                                        updatedAt: date
                                     },
                                 };
                                 console.info("Put docClient param ja", putParamJa);
@@ -341,7 +341,7 @@ async function scrapingContent(link: string, title: string, outputResults: Outpu
     let slug = await createSlug(title);
     slug = await checkSlugWithRetry(slug, TABLE_NAME_IS_POSTS, "isPostsBySlug", "#slug = :slug");
 
-    // 投稿の登録（タイトルの重複チェック） 
+    // 投稿の登録（タイトルの重複チェック）
     if (!psotItem.length) {
         const param: PutCommandInput = {
             TableName: TABLE_NAME_IS_POSTS,

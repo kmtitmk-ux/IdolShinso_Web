@@ -1,5 +1,5 @@
 {
-  "name": "is-sns-function",
+  "name": "issocialprocessor",
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
@@ -9,11 +9,9 @@
   "license": "ISC",
   "description": "",
   "dependencies": {
-    "@aws-sdk/client-dynamodb": "^3.919.0",
-    "@aws-sdk/lib-dynamodb": "^3.919.0",
+    "@googleapis/sheets": "^14.0.0",
     "axios": "^1.13.1",
     "dayjs": "^1.11.19",
-    "googleapis": "^173.0.0",
     "twitter-api-v2": "^1.27.0"
   }
 }

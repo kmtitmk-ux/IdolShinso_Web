@@ -1,6 +1,7 @@
 import axios from "axios";
+
 const GRAPH_BASE = 'https://graph.threads.net/v1.0';
-const THREADS_ACCESS_TOKEN = process.env.THREADS_ACCESS_TOKEN;
+const THREADS_ACCESS_TOKEN: string = process.env.THREADS_ACCESS_TOKEN ?? "";
 
 // ユーザーIDを取得
 export async function getUserId() {
@@ -13,6 +14,7 @@ export async function getUserId() {
 
 // 投稿
 export async function postToThreads(userId: string, text: string) {
+    console.info("Posting to Threads:", { userId, text });
     // 下書き作成
     const draft = await axios.post(
         `${GRAPH_BASE}/${userId}/threads`,
@@ -85,4 +87,25 @@ export async function getPostInsights(postId: string) {
     );
     console.info("Post Insights:", JSON.stringify(res.data, null, 2));
     return res.data;
+}
+
+// 投稿のリプライ取得
+type ThreadsReply = {
+    id: string;
+    text: string;
+};
+export async function getPostReplies(snsPostId: string): Promise<ThreadsReply[]> {
+    let url = `${GRAPH_BASE}/${snsPostId}/replies`;
+    let params: { access_token: string; fields: string; } | undefined = {
+        access_token: THREADS_ACCESS_TOKEN,
+        fields: "id,text"
+    };
+    const all: ThreadsReply[] = [];
+    while (url) {
+        const res = await axios.get(url, { params });
+        all.push(...(res.data.data ?? []));
+        url = res.data.paging?.next ?? null;
+        params = undefined;
+    }
+    return all;
 }

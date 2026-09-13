@@ -21,7 +21,7 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
     // 待機秒数(5〜30秒のランダム)と次ステップ名を生成
     const generateWait = new sfn.Pass(stack, "GenerateWaitAndNextStep", {
         parameters: {
-            "waitSeconds.$": "States.MathAdd(States.MathRandom(5, 30), 0)",
+            "waitSeconds.$": "States.MathAdd(States.MathRandom(5, 900), 0)",
         },
         resultPath: "$.wait",
     });
@@ -52,8 +52,20 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
         resultPath: sfn.JsonPath.DISCARD,
     });
 
+    const runThreadsGetReply = new tasks.LambdaInvoke(stack, "runThreadsGetReply", {
+        lambdaFunction: isSnsFunction,
+        payload: sfn.TaskInput.fromObject({ procType: "threadsGetReply" }),
+        resultPath: sfn.JsonPath.DISCARD,
+    });
+
+    const runThreadsReplyPost = new tasks.LambdaInvoke(stack, "runThreadsReplyPost", {
+        lambdaFunction: isSnsFunction,
+        payload: sfn.TaskInput.fromObject({ procType: "threadsReplyPost" }),
+        resultPath: sfn.JsonPath.DISCARD,
+    });
+
     // SNS投稿処理を実行し、次ステップをチェックに切り替える準備へ
-    const runPostX = new tasks.LambdaInvoke(stack, "runPostX", {
+    const runXPost = new tasks.LambdaInvoke(stack, "runXPost", {
         lambdaFunction: isSnsFunction,
         payload: sfn.TaskInput.fromObject({ procType: "xPost" }),
         resultPath: sfn.JsonPath.DISCARD,
@@ -64,7 +76,9 @@ export function createIsRandomSnsWorkflow(stack: Stack, isSnsFunction: IFunction
         .next(runPostThreads)
         .next(runThreadsTodayCheck)
         .next(runReplyUrlThreads)
-        .next(runPostX);
+        .next(runThreadsGetReply)
+        .next(runThreadsReplyPost)
+        .next(runXPost);
 
     const stateMachine = new sfn.StateMachine(stack, "IsRandomSnsLambdaInvoker", {
         definitionBody: sfn.DefinitionBody.fromChainable(definition),

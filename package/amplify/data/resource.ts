@@ -3,7 +3,7 @@ import { type ClientSchema, a, defineData, defineFunction, defineBackend } from 
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
-specifies that any unauthenticated user can "create", "read", "update", 
+specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 
@@ -117,18 +117,22 @@ const schema = a.schema({
             crossPosted: a.boolean(),
             engagementRate: a.float(),
             lang: a.string().required(),
+            originalPostId: a.string(),
             postId: a.id(),
             post: a.belongsTo('IsPosts', 'postId'),
             platform: a.string(),
+            replyContent: a.string(),
             s3Key: a.string(),
             snsPostId: a.string(),
             status: a.string().required(),
+            type: a.string().required(),
             updatedAt: a.datetime(),
         })
         .secondaryIndexes((index) => [
             index('status').sortKeys(['updatedAt']),
             index('platform').sortKeys(['updatedAt']),
-            index('platform').sortKeys(['createdAt'])
+            index('platform').sortKeys(['createdAt']),
+            index('originalPostId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
 });

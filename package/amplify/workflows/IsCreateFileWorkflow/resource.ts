@@ -3,24 +3,24 @@ import * as events from "aws-cdk-lib/aws-events";
 import * as targets from "aws-cdk-lib/aws-events-targets";
 import { IFunction } from "aws-cdk-lib/aws-lambda";
 type ScheduledFunctions = {
-  IsCreateFileInstance: IFunction;
+    IsCreateFileInstance: IFunction;
 };
 export function createFileWorkflow(scope: Stack, lambdaFn: ScheduledFunctions, env: "sandbox" | "develop" | "main" = "sandbox") {
-  // 7日おきに直接Lambdaを起動する EventBridge ルール
-  const { IsCreateFileInstance } = lambdaFn;
-  new events.Rule(scope, "IsCreateFil", {
-    schedule: events.Schedule.cron({
-      minute: "0",
-      hour: "0",
-      weekDay: "SUN",
-    }),
-    targets: [
-      new targets.LambdaFunction(IsCreateFileInstance, {
-        event: events.RuleTargetInput.fromObject({
-          procType: "createDailyFile"
+    // 7日おきに直接Lambdaを起動する EventBridge ルール
+    const { IsCreateFileInstance } = lambdaFn;
+    new events.Rule(scope, "IsCreateFil", {
+        schedule: events.Schedule.cron({
+            minute: "0",
+            hour: "0",
+            weekDay: "SUN",
         }),
-      })
-    ],
-    enabled: env === "main",
-  });
+        targets: [
+            new targets.LambdaFunction(IsCreateFileInstance, {
+                event: events.RuleTargetInput.fromObject({
+                    procType: "createDailyFile"
+                }),
+            })
+        ],
+        enabled: env === "main",
+    });
 }
