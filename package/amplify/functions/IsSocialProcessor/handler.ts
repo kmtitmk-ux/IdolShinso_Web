@@ -57,7 +57,7 @@ export const handler: Handler = async (event) => {
                     1
                 );
                 const postItem = postItems[0];
-                if (!postItem || postItem.contentText) {
+                if (!postItem || !postItem.contentText) {
                     console.info("No items.");
                     break;
                 }
