@@ -306,7 +306,7 @@ export const handler: Handler = async (event) => {
                                 reply.id,
                                 `タイトル : ${getItem.rewrittenTitle}\n本文 : ${Item.contentText}`,
                                 reply.text,
-                                `=IFERROR(SUBSTITUTE(VLOOKUP($A2,H:I,2,false), "\\n", CHAR(10)),"")`
+                                `=IFERROR(SUBSTITUTE(VLOOKUP(A:A,H:I,2,false), "\\n", CHAR(10)),"")`
                             ]);
                             const now = new Date().toISOString();
                             return {
