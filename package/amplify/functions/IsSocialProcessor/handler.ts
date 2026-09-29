@@ -578,7 +578,7 @@ export const handler: Handler = async (event) => {
                     // 同一投稿が既に DynamoDB に存在するか確認（重複登録防止）
                     const Items = await dynamodbHelpers.queryToDynamo(
                         TABLE_NAME_SNS_POSTS,
-                        "isOriginalPostIdAndCreatedAt",
+                        "isSnsByOriginalPostIdAndCreatedAt",
                         "#originalPostId = :originalPostId",
                         "#platform = :platform AND #type = :type",
                         {

@@ -63,7 +63,6 @@ const IsSocialProcessorInstance = backend.IsSocialProcessor.resources.lambda as 
 IsSocialProcessorInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
 IsSocialProcessorInstance.addEnvironment('TABLE_NAME_POSTS', isPostsTbl.tableName);
 IsSocialProcessorInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
-IsSocialProcessorInstance.addEnvironment('GOOGLE_SPREADSHEET_ID_SNS', "1nJ0RW0CadVS6P_fqAv4Psu9k1vwPIGe8Eou5iwfaYuA");
 isSnsTbl.grantReadWriteData(IsSocialProcessorInstance);
 
 const IsCreateFileInstance = backend.IsCreateFile.resources.lambda as LambdaFunction;
