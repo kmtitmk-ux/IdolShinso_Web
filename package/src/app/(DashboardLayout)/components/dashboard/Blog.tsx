@@ -31,7 +31,7 @@ const Blog = ({
 }) => {
     return (
         <>
-            {data.length === 0 && type !== "nextPage" && <Typography>記事が見つかりませんでした。</Typography>}
+            {data.length === 0 && type !== "nextPage" && <Typography>関連記事はありません。</Typography>}
             {data.map((product: any, index: number) => {
                 const postmeta = product?.postmeta[0] || { name: "", slug: "" };
                 const postLink = lang === "ja" ? `/posts/${product.slug}` : `/${lang}/posts/${product.slug}`;

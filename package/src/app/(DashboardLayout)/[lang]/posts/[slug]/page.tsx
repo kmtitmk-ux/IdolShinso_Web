@@ -1,6 +1,6 @@
 import { notFound } from 'next/navigation';
 import Link from "next/link";
-import { Box, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText } from '@mui/material';
+import { Box, Button, Grid, Typography, Breadcrumbs, List, ListItem, ListItemText, CircularProgress } from '@mui/material';
 import PageContainer from '@/app/(DashboardLayout)/components/container/PageContainer';
 import DashboardCard from '@/app/(DashboardLayout)/components/shared/DashboardCard';
 import Image from "next/image";
@@ -8,8 +8,12 @@ import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
 import { getArticle, getRelatedPosts, getTranslations } from "@/utils/cachedQueries";
+import MembersContent from '@/app/(DashboardLayout)/components/dashboard/MembersContent';
+import PurchaseAlert from '@/app/(DashboardLayout)/components/dashboard/PurchaseAlert';
+import { Suspense } from 'react';
 
-export const revalidate = 60;
+export const revalidate = 21600;
+// export const revalidate = 0;
 
 const window = new JSDOM("").window;
 const DOMPurify = createDOMPurify(window);
@@ -20,6 +24,7 @@ interface PageProps {
         lang: string;
     }>;
 }
+
 export async function generateMetadata({ params }: PageProps) {
     const awaitedParams = await params;
     const { lang, slug } = awaitedParams;
@@ -57,6 +62,7 @@ export async function generateMetadata({ params }: PageProps) {
         },
     };
 }
+
 const SamplePage = async ({ params }: PageProps) => {
     const awaitedParams = await params;
     const { lang, slug } = awaitedParams;
@@ -101,7 +107,7 @@ const SamplePage = async ({ params }: PageProps) => {
         return [...acc, v];
     }, []);
     const translationsResults = lang === "ja"
-        ? uniquePosts.map(() => ({ data: [] as { rewrittenTitle?: string }[] }))
+        ? uniquePosts.map(() => ({ data: [] as { rewrittenTitle?: string; }[] }))
         : await getTranslations(uniquePosts.map(v => v.post!.id), lang);
     const posts = uniquePosts.reduce<any[]>((acc, v, i) => {
         const translationsData = translationsResults[i].data;
@@ -124,7 +130,8 @@ const SamplePage = async ({ params }: PageProps) => {
             title={title}
             description="this is Sample page"
         >
-            <BreadcrumbSetter title={title} category={data.postmeta[0]} />
+            <Suspense><PurchaseAlert message={"ご購入ありがとうございます！"} /></Suspense>
+            {data.postmeta[0] && <BreadcrumbSetter title={title} category={data.postmeta[0]} />}
             <DashboardCard title={title}>
                 <List dense={false} sx={{ display: "inline-flex", width: "auto" }}>
                     {tags.map((meta) => (
@@ -148,22 +155,36 @@ const SamplePage = async ({ params }: PageProps) => {
                         display: 'block',
                     }}
                 />}
-                <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
-                <Grid container spacing={3} mt={2}>
-                    {
-                        data.comments && data.comments.map((comment) => (
-                            <Grid key={comment.id} size={12}>
-                                <div style={{ fontWeight: "bold" }}>{comment.header ?? ""}</div>
-                                <div
-                                    id="single"
-                                    dangerouslySetInnerHTML={{
-                                        __html: DOMPurify.sanitize(comment.content ?? "")
-                                    }}
-                                />
-                            </Grid>
-                        ))
-                    }
-                </Grid>
+                {data.visibility == "paid" || data.visibility === "members" ? (
+                    <>
+                        <Suspense fallback={<CircularProgress sx={{ mt: 3 }} />}>
+                            <MembersContent
+                                post={data}
+                                slug={slug}
+                            />
+                        </Suspense>
+                    </>
+                ) : (
+                    <>
+                        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
+                        <Grid container spacing={3} mt={2}>
+                            {
+                                data.comments && data.comments.map((comment) => (
+                                    <Grid key={comment.id} size={12}>
+                                        <div style={{ fontWeight: "bold" }}>{comment.header ?? ""}</div>
+                                        <div
+                                            id="single"
+                                            dangerouslySetInnerHTML={{
+                                                __html: DOMPurify.sanitize(comment.content ?? "")
+                                            }}
+                                        />
+                                    </Grid>
+                                ))
+                            }
+                        </Grid>
+                    </>
+                )}
+
                 <List dense={false} sx={{ display: "inline-flex", width: "auto" }}>
                     {tags.map((meta) => (
                         <ListItem key={meta.id} sx={{ whiteSpace: "nowrap", paddingRight: 0 }}>
@@ -176,11 +197,10 @@ const SamplePage = async ({ params }: PageProps) => {
                 <Grid container spacing={3} mt={2} mb={3}>
                     <Blog data={posts} lang={lang} />
                 </Grid>
-                <BreadcrumbSetter title={title} category={data.postmeta[0]} />
+                {data.postmeta[0] && <BreadcrumbSetter title={title} category={data.postmeta[0]} />}
             </DashboardCard>
         </PageContainer>
     );
 };
 
 export default SamplePage;
-

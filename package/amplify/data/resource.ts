@@ -1,5 +1,4 @@
-import { type ClientSchema, a, defineData, defineFunction, defineBackend } from '@aws-amplify/backend';
-
+import { type ClientSchema, a, defineData, defineFunction, secret } from '@aws-amplify/backend';
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
@@ -7,6 +6,29 @@ specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
 
+export const IsWebhook = defineFunction({
+    name: "IsWebhook",
+    entry: "../functions/IsWebhook/handler.ts",
+    resourceGroupName: 'data',
+    timeoutSeconds: 15,
+    environment: {
+        STRIPE_SECRET_KEY: secret('STRIPE_SECRET_KEY'),
+        STRIPE_WEBHOOK_SECRET: secret('STRIPE_WEBHOOK_SECRET'),
+        SITE_URL: process.env.SITE_URL || 'https://geinouwasa.com',
+    }
+});
+
+export const IsPayment = defineFunction({
+    name: "IsPayment",
+    entry: "../functions/IsPayment/handler.ts",
+    resourceGroupName: 'data',
+    timeoutSeconds: 15,
+    environment: {
+        STRIPE_SECRET_KEY: secret('STRIPE_SECRET_KEY'),
+        STRIPE_WEBHOOK_SECRET: secret('STRIPE_WEBHOOK_SECRET'),
+        SITE_URL: process.env.SITE_URL || 'https://geinouwasa.com',
+    }
+});
 
 const IsPosts = {
     rewrittenTitle: a.string(),
@@ -28,6 +50,8 @@ const schema = a.schema({
         .model({
             ...IsPosts,
             createdAt: a.datetime().required(),
+            excerpt: a.string(),
+            s3Key: a.string(),
             slug: a.string().required(),
             thumbnail: a.string(),
             title: a.string().required(),
@@ -36,7 +60,10 @@ const schema = a.schema({
             commentsTranslations: a.hasMany('IsCommentsTranslations', 'postId'),
             postmeta: a.hasMany('IsPostMeta', 'postId'),
             postsTranslations: a.hasMany('IsPostsTranslations', 'postId'),
-            sns: a.hasMany('IsSns', 'postId')
+            postAnalytics: a.hasMany('IsPostAnalytics', 'postId'),
+            priceId: a.string(),
+            sns: a.hasMany('IsSns', 'postId'),
+            visibility: a.enum(['public', 'members', 'paid'])
         })
         .secondaryIndexes((index) => [
             index('title'),
@@ -44,7 +71,7 @@ const schema = a.schema({
             index('status').sortKeys(['createdAt']),
             index('status').sortKeys(['updatedAt'])
         ])
-        .authorization((allow) => [allow.guest().to(['read'])]),
+        .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
     IsPostMeta: a
         .model({
             createdAt: a.datetime().required(),
@@ -59,6 +86,20 @@ const schema = a.schema({
             index('slugTaxonomy').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
+    IsPurchases: a.model({
+        userId: a.string().required(),
+        postId: a.id().required(),
+        stripeSessionId: a.string().required(),
+        amount: a.integer(),
+        purchasedAt: a.datetime(),
+    })
+        .identifier(['userId', 'postId']) // 同じ記事の二重購入を構造的に防げる
+        .secondaryIndexes((index) => [
+            index('stripeSessionId'), // Webhook の冪等チェック用
+        ])
+        .authorization((allow) => [
+            allow.ownerDefinedIn('userId').to(['read']),
+        ]),
     IsTerms: a
         .model({
             ...IsTerms,
@@ -78,7 +119,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId').sortKeys(['createdAt'])
         ])
-        .authorization((allow) => [allow.guest().to(['read'])]),
+        .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
     IsPostsTranslations: a
         .model({
             ...IsPosts,
@@ -89,7 +130,7 @@ const schema = a.schema({
         .secondaryIndexes((index) => [
             index('postId')
         ])
-        .authorization((allow) => [allow.guest().to(['read'])]),
+        .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
     IsTermsTranslations: a
         .model({
             ...IsTerms,
@@ -135,22 +176,49 @@ const schema = a.schema({
             index('originalPostId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
-});
+    IsUsers: a
+        .model({
+            email: a.string().required(),
+            createdAt: a.string().required(),
+            plan: a.enum(['free', 'premium']),
+            role: a.enum(['user', 'admin'])
+        })
+        .secondaryIndexes((index) => [
+            index('email').sortKeys(['role'])
+        ])
+        .authorization((allow) => [allow.owner()]),
+    IsPostAnalytics: a.model({
+        postId: a.id(),
+        averageEngagementTime: a.integer().required(),
+        pageViews: a.integer().required(),
+        periodStart: a.string().required(),
+        periodEnd: a.string().required(),
+        post: a.belongsTo('IsPosts', 'postId'),
+    })
+        .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
+
+    IsFunctionPayment: a
+        .mutation()
+        .arguments({
+            productId: a.string().required(),
+        })
+        .returns(a.string())
+        .handler(a.handler.function(IsPayment))
+        .authorization(allow => [
+            allow.authenticated()
+        ])
+}).authorization((allow) => [
+    allow.resource(IsPayment),
+    allow.resource(IsWebhook),
+]);
 
 export type Schema = ClientSchema<typeof schema>;
-
 
 export const data = defineData({
     schema,
     authorizationModes: {
         defaultAuthorizationMode: 'identityPool',
     },
-});
-
-export const IsCreateFile = defineFunction({
-    name: "IsCreateFile",
-    entry: "../functions/IsCreateFile/handler.ts",
-    timeoutSeconds: 30
 });
 
 /*== STEP 2 ===============================================================

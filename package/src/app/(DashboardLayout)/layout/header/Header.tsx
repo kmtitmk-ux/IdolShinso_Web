@@ -19,6 +19,8 @@ import {
 } from '@mui/material';
 import PropTypes from 'prop-types';
 import Link from 'next/link';
+import { signOut } from 'aws-amplify/auth';
+import { useDbUser } from '@/app/(DashboardLayout)/components/forms/AuthSync';
 // components
 import Profile from './Profile';
 import { IconBellRinging, IconMenu } from '@tabler/icons-react';
@@ -57,6 +59,11 @@ const Header = ({ toggleMobileSidebar = () => { }, lang }: ItemType) => {
     }));
     const handleChange = (event: SelectChangeEvent): void => {
         router.push(`/${event.target.value}`);
+    };
+    const { dbUser } = useDbUser();
+    const handleSignOut = async () => {
+        await signOut();
+        window.location.href = "/";
     };
     return (
         <AppBarStyled position="sticky" color="default">
@@ -100,6 +107,11 @@ const Header = ({ toggleMobileSidebar = () => { }, lang }: ItemType) => {
                         </Select>
                     </FormControl>
                 </Box>
+                {dbUser && (
+                    <Button onClick={handleSignOut} color="inherit" sx={{ ml: 1 }}>
+                        ログアウト
+                    </Button>
+                )}
                 {/* <Stack spacing={1} direction="row" alignItems="center">
                     <Button variant="contained" component={Link} href="/authentication/login" disableElevation color="primary">
                         Login

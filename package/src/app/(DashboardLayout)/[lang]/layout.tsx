@@ -1,5 +1,6 @@
 import React from "react";
 import { Container, Box } from "@mui/material";
+import AuthProviders from "@/src/app/(DashboardLayout)/AuthProviders";
 import ClientLayout from "@/src/app/(DashboardLayout)/ClientLayout";
 import ClientThemeProvider from "@/app/ClientThemeProvider";
 import Script from 'next/script';
@@ -49,24 +50,26 @@ export default async function RootLayout({
                         dangerouslySetInnerHTML={{ __html: '' }}
                     />
                     <ClientThemeProvider>
-                        <ClientLayout categoryList={await fetchCategoryData()} archiveList={await fetchArchiveData()}>
-                            {/* PageContent */}
-                            {/* ------------------------------------------- */}
-                            <Container
-                                sx={{
-                                    paddingTop: "20px",
-                                    maxWidth: "1200px",
-                                }}
-                            >
+                        <AuthProviders>
+                            <ClientLayout categoryList={await fetchCategoryData()} archiveList={await fetchArchiveData()}>
+                                {/* PageContent */}
                                 {/* ------------------------------------------- */}
-                                {/* Page Route */}
-                                {/* ------------------------------------------- */}
-                                <Box sx={{ minHeight: "calc(100vh - 170px)" }}>{children}</Box>
-                                {/* ------------------------------------------- */}
-                                {/* End Page */}
-                                {/* ------------------------------------------- */}
-                            </Container>
-                        </ClientLayout>
+                                <Container
+                                    sx={{
+                                        paddingTop: "20px",
+                                        maxWidth: "1200px",
+                                    }}
+                                >
+                                    {/* ------------------------------------------- */}
+                                    {/* Page Route */}
+                                    {/* ------------------------------------------- */}
+                                    <Box sx={{ minHeight: "calc(100vh - 170px)" }}>{children}</Box>
+                                    {/* ------------------------------------------- */}
+                                    {/* End Page */}
+                                    {/* ------------------------------------------- */}
+                                </Container>
+                            </ClientLayout>
+                        </AuthProviders>
                     </ClientThemeProvider>
                 </body>
             </html>

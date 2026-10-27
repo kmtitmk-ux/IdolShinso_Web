@@ -1,8 +1,11 @@
 import { defineBackend } from '@aws-amplify/backend';
+import { CfnResource, Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource';
-import { data, IsCreateFile } from './data/resource';
+import { data, IsPayment, IsWebhook } from './data/resource';
+import { IsCreateFile } from './functions/IsCreateFile/resource';
 import { myFirstFunction } from './functions/my-first-function/resource';
 import { IsSocialProcessor } from './functions/IsSocialProcessor/resource';
+import { IsArticleAnalytics } from './functions/IsArticleAnalytics/resource';
 import { storage } from './storage/resource';
 import {
     Effect,
@@ -15,6 +18,7 @@ import { createFileWorkflow } from './workflows/IsCreateFileWorkflow/resource';
 import { Function as LambdaFunction } from 'aws-cdk-lib/aws-lambda';
 import * as cloudfront from 'aws-cdk-lib/aws-cloudfront';
 import * as origins from 'aws-cdk-lib/aws-cloudfront-origins';
+import * as apigw from 'aws-cdk-lib/aws-apigateway';
 /**
  * @see https://docs.amplify.aws/react/build-a-backend/ to add storage, functions, and more
  */
@@ -24,6 +28,9 @@ export const backend = defineBackend({
     myFirstFunction,
     IsSocialProcessor,
     IsCreateFile,
+    IsPayment,
+    IsWebhook,
+    IsArticleAnalytics,
     storage
 });
 
@@ -42,6 +49,7 @@ const isPostMetaTbl = backend.data.resources.tables['IsPostMeta'];
 const isTermsTbl = backend.data.resources.tables['IsTerms'];
 const isCommentsTbl = backend.data.resources.tables['IsComments'];
 const isPostsTranslationsTbl = backend.data.resources.tables['IsPostsTranslations'];
+const isTblPostAnalyticsTbl = backend.data.resources.tables['IsPostAnalytics'];
 
 // S3
 const storageStack = backend.storage.resources.bucket.stack;
@@ -68,7 +76,12 @@ isSnsTbl.grantReadWriteData(IsSocialProcessorInstance);
 const IsCreateFileInstance = backend.IsCreateFile.resources.lambda as LambdaFunction;
 IsCreateFileInstance.addEnvironment('TABLE_NAME_SNS_POSTS', isSnsTbl.tableName);
 IsCreateFileInstance.addEnvironment('TABLE_NAME_POSTS', isPostsTbl.tableName);
+IsCreateFileInstance.addEnvironment('TABLE_NAME_POST_META', isPostMetaTbl.tableName);
+IsCreateFileInstance.addEnvironment('TABLE_NAME_COMMENTS', isCommentsTbl.tableName);
+IsCreateFileInstance.addEnvironment('TABLE_NAME_POST_ANALYTICS', isTblPostAnalyticsTbl.tableName);
 IsCreateFileInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
+IsCreateFileInstance.addEnvironment('KNOWLEDGE_BASE_ID', process.env.KNOWLEDGE_BASE_ID ?? 'XXX');
+IsCreateFileInstance.addEnvironment('KB_DATA_SOURCE_ID', process.env.KB_DATA_SOURCE_ID ?? 'XXX');
 
 // is-random-sns
 const { eventBusForStepFunc } = createIsRandomSnsWorkflow(externalStack, backend.IsSocialProcessor.resources.lambda);
@@ -154,23 +167,101 @@ IsCreateFileRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
         actions: [
-            'dynamodb:PutItem',
             'dynamodb:Query',
+            'dynamodb:Scan',
             'dynamodb:UpdateItem',
+            'dynamodb:PutItem',
         ],
         resources: [
             isSnsTbl.tableArn,
-            `${isSnsTbl.tableArn}/index/*`
+            `${isSnsTbl.tableArn}/index/*`,
+            isPostsTbl.tableArn,
+            `${isPostsTbl.tableArn}/index/*`,
+            isPostMetaTbl.tableArn,
+            `${isPostMetaTbl.tableArn}/index/*`,
+            isCommentsTbl.tableArn,
+            `${isCommentsTbl.tableArn}/index/*`,
+            isTblPostAnalyticsTbl.tableArn,
+            `${isTblPostAnalyticsTbl.tableArn}/index/*`
         ],
     })
 );
 IsCreateFileRole?.addToPrincipalPolicy(
     new PolicyStatement({
         effect: Effect.ALLOW,
-        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject'],
+        actions: ['s3:GetObject', 's3:PutObject', 's3:DeleteObject', 's3:ListBucket'],
+        resources: [`${isBucket01.bucketArn}`, `${isBucket01.bucketArn}/*`],
+    })
+);
+IsCreateFileRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+            'bedrock:RetrieveAndGenerate',
+            'bedrock:Retrieve',
+            'bedrock:InvokeModel',
+            'bedrock:StartIngestionJob',
+            'bedrock:GetIngestionJob',
+        ],
+        resources: ['*'],
+    })
+);
+IsCreateFileRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: [
+            'aws-marketplace:ViewSubscriptions',
+            'aws-marketplace:Subscribe',
+        ],
+        resources: ['*'],
+    })
+);
+
+// IsArticleAnalytics
+const IsArticleAnalyticsInstance = backend.IsArticleAnalytics.resources.lambda as LambdaFunction;
+IsArticleAnalyticsInstance.addEnvironment('TABLE_NAME_ARTICLE_ANALYTICS', isTblPostAnalyticsTbl.tableName);
+IsArticleAnalyticsInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
+
+const IsArticleAnalyticsRole = backend.IsArticleAnalytics.resources.lambda.role;
+IsArticleAnalyticsRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['dynamodb:PutItem'],
+        resources: [isTblPostAnalyticsTbl.tableArn],
+    })
+);
+IsArticleAnalyticsRole?.addToPrincipalPolicy(
+    new PolicyStatement({
+        effect: Effect.ALLOW,
+        actions: ['s3:GetObject'],
         resources: [`${isBucket01.bucketArn}/*`],
     })
 );
+
+// IsWebhook API Gateway
+const IsWebhookInstance = backend.IsWebhook.resources.lambda as LambdaFunction;
+const isPurchasesTbl = backend.data.resources.tables['IsPurchases'];
+isPurchasesTbl.grantReadWriteData(IsWebhookInstance);
+
+const webhookApi = new apigw.LambdaRestApi(externalStack, 'WebhookApi', {
+    handler: IsWebhookInstance,
+    proxy: true,
+});
+
+backend.addOutput({
+    custom: {
+        webhookApiUrl: webhookApi.url,
+    },
+});
+
+// S3 Vectors バケット（ベクターストア用）
+const vectorStack = backend.createStack("IsVectorStack");
+new CfnResource(vectorStack, "IsPostVectorsBucket", {
+    type: "AWS::S3Vectors::VectorBucket",
+    properties: {
+        VectorBucketName: `is-vectors-${Stack.of(vectorStack).account}`,
+    },
+});
 
 // CloudFront ディストリビューションの作成（OAC方式、public/* のみ配信）
 const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(isBucket01);

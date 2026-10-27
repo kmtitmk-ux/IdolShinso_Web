@@ -63,10 +63,9 @@ export const getArticle = unstable_cache(
     async (slug: string) => {
         return publicClient.models.IsPosts.listIsPostsBySlug(
             { slug: decodeURIComponent(slug) },
-
             {
                 selectionSet: [
-                    "id", "slug", "title", "rewrittenTitle", "thumbnail", "content", "createdAt",
+                    "id", "excerpt", "slug", "title", "rewrittenTitle", "thumbnail", "content", "createdAt", "visibility",
                     "postmeta.id", "postmeta.name", "postmeta.slug", "postmeta.taxonomy",
                     "postsTranslations.lang", "postsTranslations.rewrittenTitle", "postsTranslations.content",
                     "comments.id", "comments.createdAt", "comments.header", "comments.content",

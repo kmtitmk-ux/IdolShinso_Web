@@ -8,7 +8,6 @@ import { getPostsByStatus } from "@/utils/cachedQueries";
 
 export const revalidate = 60;
 
-
 interface PageProps {
     params: Promise<{
         slug: string;
