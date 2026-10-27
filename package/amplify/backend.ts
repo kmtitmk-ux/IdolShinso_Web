@@ -254,15 +254,6 @@ backend.addOutput({
     },
 });
 
-// S3 Vectors バケット（ベクターストア用）
-const vectorStack = backend.createStack("IsVectorStack");
-new CfnResource(vectorStack, "IsPostVectorsBucket", {
-    type: "AWS::S3Vectors::VectorBucket",
-    properties: {
-        VectorBucketName: `is-vectors-${Stack.of(vectorStack).account}`,
-    },
-});
-
 // CloudFront ディストリビューションの作成（OAC方式、public/* のみ配信）
 const s3Origin = origins.S3BucketOrigin.withOriginAccessControl(isBucket01);
 const imageDistribution = new cloudfront.Distribution(storageStack, 'ImageDistribution', {
