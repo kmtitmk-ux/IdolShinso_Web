@@ -42,8 +42,8 @@
     "wanakana": "^5.3.1"
   },
   "devDependencies": {
-    "@aws-amplify/backend": "^1.16.1",
-    "@aws-amplify/backend-cli": "^1.8.0",
+    "@aws-amplify/backend": "^1.25.1",
+    "@aws-amplify/backend-cli": "^1.10.0",
     "@types/jsdom": "^21.1.7",
     "@types/lodash": "4.14.196",
     "@types/react-helmet": "^6.1.11",

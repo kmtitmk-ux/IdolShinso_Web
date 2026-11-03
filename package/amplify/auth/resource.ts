@@ -28,8 +28,8 @@ ${createCode()}
                     preferredUsername: "name",
                 },
             },
-            callbackUrls: [process.env.SITE_URL ?? "https://geinouwasa.com"],
-            logoutUrls: [process.env.SITE_URL ?? "https://geinouwasa.com"],
+            callbackUrls: ["http://localhost:3000/","https://geinouwasa.com/"],
+            logoutUrls: ["http://localhost:3000/","https://geinouwasa.com/"],
         },
     },
     userAttributes: {

@@ -1,7 +1,7 @@
 {
   "name": "iswebhook",
   "version": "1.0.0",
-  "type": "commonjs",
+  "type": "module",
   "dependencies": {
     "stripe": "^23.0.0"
   }
