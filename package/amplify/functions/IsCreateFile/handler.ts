@@ -1,7 +1,6 @@
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
-import { env } from '$amplify/env/IsCreateFile';
 import { PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { UpdateCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
@@ -14,19 +13,19 @@ import * as dynamodbHelpers from "../shared/dynamodb-helpers.js";
 import type { Handler } from "aws-lambda";
 import type { Schema } from "../../data/resource";
 
-const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(env as any);
+const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(process.env as any);
 Amplify.configure(resourceConfig, libraryOptions);
 const client = generateClient<Schema>();
 
-const TABLE_NAME_SNS_POSTS = env.TABLE_NAME_SNS_POSTS;
-const TABLE_NAME_POSTS = env.TABLE_NAME_POSTS;
-const TABLE_NAME_POST_META = env.TABLE_NAME_POST_META;
-const TABLE_NAME_COMMENTS = env.TABLE_NAME_COMMENTS;
-const TABLE_NAME_POST_ANALYTICS = env.TABLE_NAME_POST_ANALYTICS;
-const BUCKET_NAME_01 = env.BUCKET_NAME_01;
-const KNOWLEDGE_BASE_ID = env.KNOWLEDGE_BASE_ID;
-const KB_DATA_SOURCE_ID = env.KB_DATA_SOURCE_ID;
-const PRICE_ID = env.PRICE_ID;
+const TABLE_NAME_SNS_POSTS = process.env.TABLE_NAME_SNS_POSTS ?? "";
+const TABLE_NAME_POSTS = process.env.TABLE_NAME_POSTS ?? "";
+const TABLE_NAME_POST_META = process.env.TABLE_NAME_POST_META ?? "";
+const TABLE_NAME_COMMENTS = process.env.TABLE_NAME_COMMENTS ?? "";
+const TABLE_NAME_POST_ANALYTICS = process.env.TABLE_NAME_POST_ANALYTICS ?? "";
+const BUCKET_NAME_01 = process.env.BUCKET_NAME_01 ?? "";
+const KNOWLEDGE_BASE_ID = process.env.KNOWLEDGE_BASE_ID ?? "I8TLX7MTA9";
+const KB_DATA_SOURCE_ID = process.env.KB_DATA_SOURCE_ID ?? "KWBAHX19XU";
+const PRICE_ID = process.env.PRICE_ID ?? "";
 const s3Client = new S3Client({});
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrockAgentRuntime = new BedrockAgentRuntimeClient({});
