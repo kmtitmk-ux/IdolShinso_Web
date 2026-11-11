@@ -79,8 +79,7 @@ IsCreateFileInstance.addEnvironment('TABLE_NAME_POST_META', isPostMetaTbl.tableN
 IsCreateFileInstance.addEnvironment('TABLE_NAME_COMMENTS', isCommentsTbl.tableName);
 IsCreateFileInstance.addEnvironment('TABLE_NAME_POST_ANALYTICS', isTblPostAnalyticsTbl.tableName);
 IsCreateFileInstance.addEnvironment('BUCKET_NAME_01', isBucket01.bucketName);
-IsCreateFileInstance.addEnvironment('KNOWLEDGE_BASE_ID', process.env.KNOWLEDGE_BASE_ID ?? 'I8TLX7MTA9');
-IsCreateFileInstance.addEnvironment('KB_DATA_SOURCE_ID', process.env.KB_DATA_SOURCE_ID ?? 'KWBAHX19XU');
+
 
 // is-random-sns
 const { eventBusForStepFunc } = createIsRandomSnsWorkflow(externalStack, backend.IsSocialProcessor.resources.lambda);
