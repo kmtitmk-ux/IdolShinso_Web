@@ -11,51 +11,86 @@ const client = generateClient<Schema>({ authMode: "userPool" });
 
 export default function MembersContent({
     post,
-    slug,
 }: {
     post: any;
-    slug: string;
 }) {
     const { id: postId, visibility } = post ?? {};
     const { dbUser, loading } = useDbUser();
     const pathname = usePathname();
     const searchParams = useSearchParams();
     const [excerpt, setExcerpt] = useState<string | null>(post?.excerpt ?? null);
-    const [content, setContent] = useState<string | null>(post?.content ?? null);
+    const [content, setContent] = useState<string>("");
     const [fetching, setFetching] = useState(false);
     const [paying, setPaying] = useState(false);
     const [purchased, setPurchased] = useState(false);
 
     useEffect(() => {
-        if (!dbUser || !postId) return;
+        if (!dbUser?.id || !postId) return;
+
+        // アンマウント・依存値の変更時に、古い処理の結果を捨てるためのフラグ
+        let cancelled = false;
         setFetching(true);
+
+        // Stripe決済直後のリダイレクトかどうか（?session_id=... が付いている）
         const hasSessionId = !!searchParams.get('session_id');
+
+        // 購入済みかどうかをDBで確認する
         const checkPurchase = async (): Promise<boolean> => {
-            const { data: purchases } = await client.models.IsPurchases.get({ userId: dbUser.id, postId });
-            return !!purchases;
+            const { data } = await client.models.IsPurchases.get({
+                userId: dbUser.id,
+                postId,
+            });
+            return !!data;
+        };
+
+        // 記事本文を取得して state に反映する
+        const fetchContent = async () => {
+            const { data: post } = await client.models.IsPosts.get(
+                { id: postId },
+                { selectionSet: ["content"] },
+            );
+            // 取得中にキャンセルされていたら state を更新しない
+            if (cancelled) return;
+            setExcerpt("");
+            setContent(post?.content ?? "");
         };
 
         const fetchAll = async () => {
             if (visibility === "paid") {
+                // 有料記事: まず購入済みか確認
                 let isPurchased = await checkPurchase();
+
+                // 決済直後はwebhookの反映が遅れることがあるため、
+                // 2秒間隔で最大5回（=最大10秒）ポーリングして待つ
                 if (!isPurchased && hasSessionId) {
-                    // webhookの反映を最大10秒待つ
-                    for (let i = 0; i < 5 && !isPurchased; i++) {
+                    for (let i = 0; i < 5 && !isPurchased && !cancelled; i++) {
                         await new Promise(r => setTimeout(r, 2000));
                         isPurchased = await checkPurchase();
                     }
                 }
-                if (!isPurchased) {
-                    setContent("");
-                    return;
-                }
-                setExcerpt("");
+
+                // キャンセル済み、または未購入なら本文は取得しない
+                if (cancelled || !isPurchased) return;
                 setPurchased(true);
+                await fetchContent();
+            } else if (visibility === "members") {
+                await fetchContent();
             }
         };
 
-        fetchAll().finally(() => setFetching(false));
-    }, [dbUser, slug, postId, visibility]);
+        fetchAll()
+            // 失敗してもUIが固まらないよう、ここでエラーを握る
+            .catch(err => console.error("failed to fetch post content", err))
+            // 成功・失敗・早期returnのいずれでもローディングを解除する
+            .finally(() => {
+                if (!cancelled) setFetching(false);
+            });
+
+        // クリーンアップ: 進行中の処理が完了しても state を更新させない
+        return () => {
+            cancelled = true;
+        };
+    }, [dbUser?.id, postId, visibility, searchParams]);
 
     if (loading || fetching) return <CircularProgress sx={{ mt: 3 }} />;
 
@@ -75,9 +110,17 @@ export default function MembersContent({
         return (
             <>
                 {excerpt && (
-                    <Box sx={{ textAlign: "left" }}>
-                        <div dangerouslySetInnerHTML={{ __html: excerpt ?? "" }} />
-                    </Box>
+                    <Box
+                        sx={{
+                            '& h1': { fontSize: '1.8rem !important', fontWeight: 'bold', my: 2.5 },
+                            '& h2': { fontSize: '1.5rem !important', fontWeight: 'bold', my: 2 },
+                            '& h3': { fontSize: '1.2rem !important', fontWeight: 'bold', my: 1.5 },
+                            '& p': { lineHeight: 1.8, my: 1.5 },
+                            '& a': { color: 'primary.main', textDecoration: 'underline' },
+                            '& img': { maxWidth: '100%', height: 'auto' },
+                        }}
+                        dangerouslySetInnerHTML={{ __html: excerpt ?? "" }}
+                    />
                 )}
                 <Box sx={{ mt: 3, p: 3, textAlign: "center", borderTop: 1, borderColor: "divider" }}>
                     <Typography sx={{ mb: 2 }}>
@@ -103,9 +146,17 @@ export default function MembersContent({
         return (
             <>
                 {excerpt && (
-                    <Box sx={{ textAlign: "left" }}>
-                        <div dangerouslySetInnerHTML={{ __html: excerpt ?? "" }} />
-                    </Box>
+                    <Box
+                        sx={{
+                            '& h1': { fontSize: '1.8rem !important', fontWeight: 'bold', my: 2.5 },
+                            '& h2': { fontSize: '1.5rem !important', fontWeight: 'bold', my: 2 },
+                            '& h3': { fontSize: '1.2rem !important', fontWeight: 'bold', my: 1.5 },
+                            '& p': { lineHeight: 1.8, my: 1.5 },
+                            '& a': { color: 'primary.main', textDecoration: 'underline' },
+                            '& img': { maxWidth: '100%', height: 'auto' },
+                        }}
+                        dangerouslySetInnerHTML={{ __html: excerpt ?? "" }}
+                    />
                 )}
                 <Box sx={{ mt: 3, p: 3, textAlign: "center", borderTop: 1, borderColor: "divider" }}>
                     <Typography sx={{ mb: 2 }}>この記事の続きは購入者限定です。</Typography>
@@ -117,5 +168,17 @@ export default function MembersContent({
         );
     }
 
-    return <div dangerouslySetInnerHTML={{ __html: content ?? "" }} />;
+    return (
+        <Box
+            sx={{
+                '& h1': { fontSize: '1.8rem !important', fontWeight: 'bold', my: 2.5 },
+                '& h2': { fontSize: '1.5rem !important', fontWeight: 'bold', my: 2 },
+                '& h3': { fontSize: '1.2rem !important', fontWeight: 'bold', my: 1.5 },
+                '& p': { lineHeight: 1.8, my: 1.5 },
+                '& a': { color: 'primary.main', textDecoration: 'underline' },
+                '& img': { maxWidth: '100%', height: 'auto' },
+            }}
+            dangerouslySetInnerHTML={{ __html: content ?? "" }}
+        />
+    );
 }

@@ -1,6 +1,10 @@
+import { Amplify } from 'aws-amplify';
+import { generateClient } from 'aws-amplify/data';
+import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
+import { env } from '$amplify/env/IsCreateFile';
 import { PutObjectCommand, GetObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { PutCommand, UpdateCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
+import { UpdateCommand, DynamoDBDocumentClient } from "@aws-sdk/lib-dynamodb";
 import { BedrockRuntimeClient, InvokeModelCommand } from "@aws-sdk/client-bedrock-runtime";
 import { BedrockAgentRuntimeClient, RetrieveCommand } from "@aws-sdk/client-bedrock-agent-runtime";
 import { BedrockAgentClient, StartIngestionJobCommand, GetIngestionJobCommand } from "@aws-sdk/client-bedrock-agent";
@@ -10,6 +14,10 @@ import * as dynamodbHelpers from "../shared/dynamodb-helpers.js";
 import type { Handler } from "aws-lambda";
 import type { Schema } from "../../data/resource";
 
+const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(env as any);
+Amplify.configure(resourceConfig, libraryOptions);
+const client = generateClient<Schema>();
+
 const TABLE_NAME_SNS_POSTS = process.env.TABLE_NAME_SNS_POSTS ?? "";
 const TABLE_NAME_POSTS = process.env.TABLE_NAME_POSTS ?? "";
 const TABLE_NAME_POST_META = process.env.TABLE_NAME_POST_META ?? "";
@@ -18,6 +26,7 @@ const TABLE_NAME_POST_ANALYTICS = process.env.TABLE_NAME_POST_ANALYTICS ?? "";
 const BUCKET_NAME_01 = process.env.BUCKET_NAME_01 ?? "";
 const KNOWLEDGE_BASE_ID = process.env.KNOWLEDGE_BASE_ID ?? "I8TLX7MTA9";
 const KB_DATA_SOURCE_ID = process.env.KB_DATA_SOURCE_ID ?? "KWBAHX19XU";
+const PRICE_ID = process.env.PRICE_ID ?? "";
 const s3Client = new S3Client({});
 const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 const bedrockAgentRuntime = new BedrockAgentRuntimeClient({});
@@ -25,7 +34,6 @@ const bedrockAgent = new BedrockAgentClient({});
 const bedrockRuntime = new BedrockRuntimeClient({});
 
 type BaseItem = { id: string; createdAt?: string | null; s3Key?: string | null; };
-
 type ExportConfig = {
     tableName: string;
     indexName: string;
@@ -36,7 +44,7 @@ type ExportConfig = {
     filterLang?: string;
 };
 
-const since = () => dayjs().subtract(14, "day").toISOString();
+const since = (days: number) => dayjs().subtract(days, "day").toISOString();
 
 const stripHtml = (html: string) =>
     html.replace(/<[^>]*>/g, " ").replace(/&gt;/g, ">").replace(/&lt;/g, "<").replace(/&amp;/g, "&").replace(/\s+/g, " ").trim();
@@ -56,7 +64,7 @@ async function exportToS3<T extends BaseItem>(cfg: ExportConfig) {
         cfg.keyCondition,
         cfg.filterLang ? "#lang = :lang" : undefined,
         { ...cfg.names, "#createdAt": "createdAt", ...(cfg.filterLang ? { "#lang": "lang" } : {}) },
-        { ...cfg.values, ":createdAt": since(), ...(cfg.filterLang ? { ":lang": cfg.filterLang } : {}) },
+        { ...cfg.values, ":createdAt": since(14), ...(cfg.filterLang ? { ":lang": cfg.filterLang } : {}) },
         0
     )) as T[];
 
@@ -181,14 +189,17 @@ async function fetchRelated(postIds: string[]): Promise<RelatedMaps> {
 
 export const handler: Handler = async (event) => {
     console.info(`EVENT: ${JSON.stringify(event)}`);
-
-    switch (event.procType) {
+    const { procType, executionType } = event;
+    switch (procType) {
         case "startIngestion": {
             const res = await bedrockAgent.send(new StartIngestionJobCommand({
                 knowledgeBaseId: KNOWLEDGE_BASE_ID,
                 dataSourceId: KB_DATA_SOURCE_ID,
             }));
-            return { ingestionJobId: res.ingestionJob?.ingestionJobId, status: res.ingestionJob?.status };
+            return {
+                ingestionJobId: res.ingestionJob?.ingestionJobId,
+                status: res.ingestionJob?.status
+            };
         }
 
         case "checkIngestion": {
@@ -198,7 +209,10 @@ export const handler: Handler = async (event) => {
                 ingestionJobId: event.ingestionJobId,
             }));
             const status = res.ingestionJob?.status ?? "FAILED";
-            return { ingestionJobId: event.ingestionJobId, status, done: status === "COMPLETE" };
+            return {
+                ingestionJobId: event.ingestionJobId,
+                status, done: status === "COMPLETE"
+            };
         }
 
         case "createDailyPostFile": {
@@ -208,12 +222,11 @@ export const handler: Handler = async (event) => {
                 "#status = :status AND #createdAt >= :createdAt",
                 undefined,
                 { "#status": "status", "#createdAt": "createdAt" },
-                { ":status": "published", ":createdAt": since() },
+                { ":status": "published", ":createdAt": since(14) },
                 0
             )) as Array<Schema["IsPosts"]["type"]>;
 
             const postIds = posts.map((p) => p.id);
-            // ここ確認
             const { metaMap, commentsMap, analyticsMap } = await fetchRelated(postIds);
 
             // s3Key 確定・DB更新
@@ -248,7 +261,9 @@ export const handler: Handler = async (event) => {
                     s3Key,
                     categories: metaMap[post.id] ?? [],
                     comments: (commentsMap[post.id] ?? []).slice(0, 20),
+                    content: stripHtml(post.content ?? ""),
                     analytics: analyticsMap[post.id] ?? [],
+                    visibility: post.visibility
                 };
                 files[s3Key] = (files[s3Key] ?? "") + JSON.stringify(record) + "\n";
             }
@@ -261,7 +276,7 @@ export const handler: Handler = async (event) => {
             break;
         }
 
-        case "createDailySnsFile":
+        case "createDailySnsFile": {
             for (const platform of ["x", "threads"]) {
                 try {
                     await exportToS3<Schema["IsSns"]["type"]>({
@@ -278,25 +293,46 @@ export const handler: Handler = async (event) => {
                 }
             }
             break;
+        }
 
         case "generateWeeklyArticle": {
             const id = uuidv4();
-            const now = dayjs();
-            const weekStartLabel = now.subtract(7, "day").format("YYYY-MM-DD");
-            const weekEndLabel = now.format("YYYY-MM-DD");
+            const base = dayjs();
+            let start: dayjs.Dayjs;
+            let end: dayjs.Dayjs;
+            if (executionType === "weekly") {
+                const lastWeek = base.subtract(1, "week");
+                start = lastWeek.startOf("week"); // 先週の日曜
+                end = lastWeek.endOf("week");     // 先週の土曜
+            } else {
+                const lastMonth = base.subtract(1, "month");
+                start = lastMonth.startOf("month"); // 前月 1 日
+                end = lastMonth.endOf("month");     // 前月末日
+            }
+            const startLabel = start.format("YYYY-MM-DD");
+            const endLabel = end.format("YYYY-MM-DD");
 
             // S3からプロンプトテンプレートを取得
             const promptObj = await s3Client.send(new GetObjectCommand({
                 Bucket: BUCKET_NAME_01,
-                Key: "private/prompt/WEEKLY_ARTICLE.txt",
+                Key: executionType === "weekly"
+                    ? "private/prompt/WEEKLY_ARTICLE.txt"
+                    : "private/prompt/MONTHLY_ARTICLE.txt"
             }));
             const promptTemplate = await promptObj.Body!.transformToString();
 
-            // KBから関連データを検索(取れた分だけ使う)
+            const retrievalFilter = executionType !== "weekly"
+                ? { equals: { key: "visibility", value: "members" } }
+                : undefined;
             const retrieved = await bedrockAgentRuntime.send(new RetrieveCommand({
                 knowledgeBaseId: KNOWLEDGE_BASE_ID,
-                retrievalQuery: { text: `${weekStartLabel}から${weekEndLabel}のアイドル記事 エンゲージメント コメント カテゴリー` },
-                retrievalConfiguration: { vectorSearchConfiguration: { numberOfResults: 50 } },
+                retrievalQuery: { text: `${startLabel}から${endLabel}のアイドル記事 エンゲージメント コメント カテゴリー` },
+                retrievalConfiguration: {
+                    vectorSearchConfiguration: {
+                        numberOfResults: 100,
+                        ...(retrievalFilter && { filter: retrievalFilter })
+                    }
+                }
             }));
             const kbContext = (retrieved.retrievalResults ?? [])
                 .map((r) => r.content?.text ?? "")
@@ -305,14 +341,13 @@ export const handler: Handler = async (event) => {
 
             // 置換は3つだけ(関数形式なので、データ内の "$&" などが壊れない)
             const finalPrompt = promptTemplate
-                .replace(/\{\{weekStart\}\}/g, () => weekStartLabel)
-                .replace(/\{\{weekEnd\}\}/g, () => weekEndLabel)
+                .replace(/\{\{start\}\}/g, () => startLabel)
+                .replace(/\{\{end\}\}/g, () => endLabel)
                 .replace(/\{\{kbContext\}\}/g, () => kbContext);
 
             // 未置換の変数が残っていればログに出す
             const leftover = finalPrompt.match(/\{\{[^}]+\}\}/g);
             if (leftover) console.warn(`Unreplaced placeholders: ${[...new Set(leftover)].join(", ")}`);
-
 
             // Claudeで記事生成
             const invokeRes = await bedrockRuntime.send(new InvokeModelCommand({
@@ -324,9 +359,13 @@ export const handler: Handler = async (event) => {
                     max_tokens: 8192,
                     thinking: { type: "adaptive" },
                     output_config: { effort: "low" },
-                    messages: [{ role: "user", content: finalPrompt }],
-                }),
+                    messages: [{
+                        role: "user",
+                        content: finalPrompt
+                    }]
+                })
             }));
+
             // 停止理由と使用トークンを必ず確認
             const invokeBody = JSON.parse(new TextDecoder().decode(invokeRes.body));
             console.info(`stop_reason: ${invokeBody.stop_reason}`);
@@ -343,7 +382,7 @@ export const handler: Handler = async (event) => {
                 .map((b: { text: string; }) => b.text)
                 .join("");
 
-            const article = JSON.parse(articleContent)
+            const article = JSON.parse(articleContent);
 
             const MAX = 200;
             const m = article.content.match(/^([\s\S]*?)<h2[\s>]/i);
@@ -361,31 +400,35 @@ export const handler: Handler = async (event) => {
             const title: string = article.title;
             const content: string = article.content;
             const excerpt: string = article.excerpt;
-            const nowIso = now.toISOString();
+            const nowIso = base.toISOString();
+            type Visibility = NonNullable<Schema["IsPosts"]["type"]["visibility"]>;
+            const visibility: Visibility = executionType === "weekly" ? "members" : "paid";
+            const priceId = executionType === "weekly" ? "" : PRICE_ID;
             const putParams = {
-                TableName: TABLE_NAME_POSTS,
-                Item: {
-                    id,
-                    title,
-                    slug: id,
-                    content,
-                    excerpt,
-                    rewrittenTitle: title,
-                    // thumbnail: null,
-                    // s3Key: null,
-                    status: "published",
-                    visibility: "members",
-                    createdAt: nowIso,
-                    updatedAt: nowIso
-                }
+                id,
+                title,
+                slug: id,
+                content,
+                excerpt,
+                rewrittenTitle: title,
+                status: "published",
+                visibility,
+                createdAt: nowIso,
+                updatedAt: nowIso,
+                priceId,
+                // thumbnail: null,
+                // s3Key: null,
             };
-            console.info(`Putting weekly article to DynamoDB: ${JSON.stringify(putParams)}`);
-            await docClient.send(new PutCommand(putParams));
+            const { data, errors } = await client.models.IsPosts.create(putParams);
+            console.info(`Putting ${executionType} article to DynamoDB: ${JSON.stringify(data)}`);
+            if (errors?.length) {
+                console.error("IsPosts.create failed:", errors);
+            }
             break;
         }
 
         default:
-            throw new Error(`Unknown procType: ${event.procType}`);
+            throw new Error(`Unknown procType: ${procType}`);
     }
 
     return { statusCode: 200, body: "" };

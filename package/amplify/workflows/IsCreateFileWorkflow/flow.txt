@@ -1,0 +1,25 @@
+ファイル生成ワークフロー
+
+EventBridge から { executionType: "weekly" | "monthly" } を受け取って起動する。
+
+            executionType で分岐
+            ┌───────┴────────┐
+        weekly            monthly
+   (毎週日曜 00:00 UTC)  (毎月1日 01:00 UTC)
+            │                │
+     ファイル生成             │
+     (投稿 / SNS を並列)      │
+            ▼                │
+     KB 同期開始              │
+            ▼                │
+     同期完了までポーリング     │
+     (60 秒間隔)             │
+            └───────┬────────┘
+                    ▼
+                 記事生成
+                    ▼
+                  終了
+
+注意
+- 手動実行時は入力に {"executionType": "weekly" | "monthly"} が必須
+- main 環境以外ではスケジュールを無効化する

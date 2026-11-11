@@ -11,6 +11,7 @@ const postSelectionSet = [
 
 export const getPostsByStatus = unstable_cache(
     async (token: string | null) => {
+        console.log({ status: "published" }, { nextToken: token, sortDirection: "DESC", limit: 8, selectionSet: postSelectionSet });
         return publicClient.models.IsPosts.listIsPostsByStatusAndCreatedAt(
             { status: "published" },
             { nextToken: token, sortDirection: "DESC", limit: 8, selectionSet: postSelectionSet }
@@ -65,11 +66,11 @@ export const getArticle = unstable_cache(
             { slug: decodeURIComponent(slug) },
             {
                 selectionSet: [
-                    "id", "excerpt", "slug", "title", "rewrittenTitle", "thumbnail", "content", "createdAt", "visibility",
+                    "id", "slug", "title", "rewrittenTitle", "excerpt", "content", "thumbnail", "visibility", "createdAt",
                     "postmeta.id", "postmeta.name", "postmeta.slug", "postmeta.taxonomy",
                     "postsTranslations.lang", "postsTranslations.rewrittenTitle", "postsTranslations.content",
-                    "comments.id", "comments.createdAt", "comments.header", "comments.content",
-                ]
+                    "comments.id", "comments.header", "comments.content", "comments.createdAt",
+                ],
             }
         );
     },
@@ -84,6 +85,7 @@ export const getRelatedPosts = unstable_cache(
                 publicClient.models.IsPostMeta.listIsPostMetaBySlugTaxonomyAndCreatedAt(
                     { slugTaxonomy },
                     {
+                        sortDirection: "DESC",
                         selectionSet: [
                             "id", "slug", "name",
                             "post.id", "post.slug", "post.title", "post.rewrittenTitle",
@@ -96,6 +98,20 @@ export const getRelatedPosts = unstable_cache(
     },
     ['getRelatedPosts'],
 
+    { revalidate: REVALIDATE }
+);
+
+export const getMembersPost = unstable_cache(
+    async (currentId?: string) => {
+        return publicClient.models.IsPosts.listIsPostsByVisibilityAndCreatedAt(
+            { visibility: "members" },
+            {
+                limit: 1, sortDirection: "DESC", selectionSet: postSelectionSet,
+                ...(currentId && { filter: { id: { ne: currentId } } }),
+            }
+        );
+    },
+    ['getMembersPost'],
     { revalidate: REVALIDATE }
 );
 

@@ -7,7 +7,7 @@ import Image from "next/image";
 import createDOMPurify from "dompurify";
 import { JSDOM } from "jsdom";
 import Blog from '@/app/(DashboardLayout)/components/dashboard/Blog';
-import { getArticle, getRelatedPosts, getTranslations } from "@/utils/cachedQueries";
+import { getArticle, getRelatedPosts, getTranslations, getMembersPost } from "@/utils/cachedQueries";
 import MembersContent from '@/app/(DashboardLayout)/components/dashboard/MembersContent';
 import PurchaseAlert from '@/app/(DashboardLayout)/components/dashboard/PurchaseAlert';
 import { Suspense } from 'react';
@@ -98,18 +98,19 @@ const SamplePage = async ({ params }: PageProps) => {
         );
     };
     const tags = data.postmeta.filter((pm) => pm.taxonomy === "tags");
-    const postmetaResults = await getRelatedPosts(
-        data.postmeta.map(term => `${term.slug}_${term.taxonomy}`)
-    );
+    const [postmetaResults, { data: membersData }] = await Promise.all([
+        getRelatedPosts(data.postmeta.map(term => `${term.slug}_${term.taxonomy}`)),
+        getMembersPost(),
+    ]);
     const allPostmeta = postmetaResults.flatMap(r => r.data);
     const uniquePosts = allPostmeta.reduce<typeof allPostmeta>((acc, v) => {
-        if (!v.post || acc.some(a => a.post?.id === v.post!.id) || acc.length >= 8) return acc;
+        if (!v.post || acc.some(a => a.post?.id === v.post!.id) || acc.length >= 7) return acc;
         return [...acc, v];
     }, []);
     const translationsResults = lang === "ja"
         ? uniquePosts.map(() => ({ data: [] as { rewrittenTitle?: string; }[] }))
         : await getTranslations(uniquePosts.map(v => v.post!.id), lang);
-    const posts = uniquePosts.reduce<any[]>((acc, v, i) => {
+    const relatedPosts = uniquePosts.reduce<any[]>((acc, v, i) => {
         const translationsData = translationsResults[i].data;
         if (!translationsData.length && lang !== "ja") return acc;
         const title = translationsData[0]?.rewrittenTitle ?? v.post?.rewrittenTitle ?? "";
@@ -125,6 +126,21 @@ const SamplePage = async ({ params }: PageProps) => {
             postmeta: [{ id: v?.id ?? "", slug: v.slug, name: v.name }]
         }];
     }, []);
+    const membersPost = membersData[0];
+    const membersPostFormatted = membersPost ? {
+        id: membersPost.id,
+        slug: membersPost.slug,
+        title: membersPost.title,
+        rewrittenTitle: membersPost.postsTranslations?.find((t: any) => t.lang === lang)?.rewrittenTitle ?? membersPost.rewrittenTitle ?? "",
+        thumbnail: membersPost.thumbnail ?? "",
+        imageUrl: membersPost.thumbnail ? `https://${process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN}/${membersPost.thumbnail}` : "",
+        createdAt: membersPost.createdAt ?? "",
+        postmeta: membersPost.postmeta?.slice(0, 1) ?? [],
+    } : null;
+    const posts = [
+        ...(membersPostFormatted ? [membersPostFormatted] : []),
+        ...relatedPosts,
+    ];
     return (
         <PageContainer
             title={title}
@@ -159,14 +175,23 @@ const SamplePage = async ({ params }: PageProps) => {
                     <>
                         <Suspense fallback={<CircularProgress sx={{ mt: 3 }} />}>
                             <MembersContent
-                                post={data}
-                                slug={slug}
+                                post={(({ content, ...rest }) => rest)(data)}
                             />
                         </Suspense>
                     </>
                 ) : (
                     <>
-                        <div dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }} />
+                        <Box
+                            sx={{
+                                '& h1': { fontSize: '1.8rem !important', fontWeight: 'bold', my: 2.5 },
+                                '& h2': { fontSize: '1.5rem !important', fontWeight: 'bold', my: 2 },
+                                '& h3': { fontSize: '1.2rem !important', fontWeight: 'bold', my: 1.5 },
+                                '& p': { lineHeight: 1.8, my: 1.5 },
+                                '& a': { color: 'primary.main', textDecoration: 'underline' },
+                                '& img': { maxWidth: '100%', height: 'auto' },
+                            }}
+                            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(content) }}
+                        />
                         <Grid container spacing={3} mt={2}>
                             {
                                 data.comments && data.comments.map((comment) => (

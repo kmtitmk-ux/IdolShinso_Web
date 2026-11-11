@@ -1,7 +1,7 @@
 import { defineBackend } from '@aws-amplify/backend';
 import { CfnResource, Stack } from 'aws-cdk-lib';
 import { auth } from './auth/resource';
-import { data, IsPayment, IsWebhook } from './data/resource';
+import { data, IsPayment, IsWebhook, IsGetPaidContent } from './data/resource';
 import { IsCreateFile } from './functions/IsCreateFile/resource';
 import { myFirstFunction } from './functions/my-first-function/resource';
 import { IsSocialProcessor } from './functions/IsSocialProcessor/resource';
@@ -31,6 +31,7 @@ export const backend = defineBackend({
     IsPayment,
     IsWebhook,
     IsArticleAnalytics,
+    IsGetPaidContent,
     storage
 });
 
@@ -38,9 +39,7 @@ const NEXT_PUBLIC_CLOUDFRONT_DOMAIN = process.env.NEXT_PUBLIC_CLOUDFRONT_DOMAIN 
 
 const externalStack = backend.createStack("MyExternalDataSources");
 const parentStackName = externalStack.nestedStackParent?.stackName ?? externalStack.stackName;
-const env = parentStackName.includes("main") ? "main"
-    : parentStackName.includes("develop") ? "develop"
-        : "sandbox";
+const env = parentStackName.includes("main") ? "main" : "sandbox";
 
 // DynamoDB
 const isPostsTbl = backend.data.resources.tables['IsPosts'];

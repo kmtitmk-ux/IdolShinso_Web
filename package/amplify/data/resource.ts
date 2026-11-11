@@ -1,10 +1,23 @@
 import { type ClientSchema, a, defineData, defineFunction, secret } from '@aws-amplify/backend';
+import { IsCreateFile } from '../functions/IsCreateFile/resource';
 /*== STEP 1 ===============================================================
 The section below creates a Todo database table with a "content" field. Try
 adding a new "isDone" field as a boolean. The authorization rule below
 specifies that any unauthenticated user can "create", "read", "update",
 and "delete" any "Todo" records.
 =========================================================================*/
+
+export const IsGetPaidContent = defineFunction({
+    name: "IsGetPaidContent",
+    entry: "../functions/IsGetPaidContent/handler.ts",
+    memoryMB: 256,
+    resourceGroupName: "data",
+    environment: {
+        // STRIPE_SECRET_KEY: secret('STRIPE_SECRET_KEY'),
+        // STRIPE_WEBHOOK_SECRET: secret('STRIPE_WEBHOOK_SECRET'),
+        // SITE_URL: process.env.SITE_URL || 'https://geinouwasa.com',
+    }
+});
 
 export const IsWebhook = defineFunction({
     name: "IsWebhook",
@@ -69,7 +82,8 @@ const schema = a.schema({
             index('title'),
             index('slug'),
             index('status').sortKeys(['createdAt']),
-            index('status').sortKeys(['updatedAt'])
+            index('status').sortKeys(['updatedAt']),
+            index('visibility').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
     IsPostMeta: a
@@ -86,20 +100,23 @@ const schema = a.schema({
             index('slugTaxonomy').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
-    IsPurchases: a.model({
-        userId: a.string().required(),
-        postId: a.id().required(),
-        stripeSessionId: a.string().required(),
-        amount: a.integer(),
-        purchasedAt: a.datetime(),
-    })
-        .identifier(['userId', 'postId']) // 同じ記事の二重購入を構造的に防げる
+
+    IsPurchases: a
+        .model({
+            userId: a.string().required(),
+            postId: a.id().required(),
+            stripeSessionId: a.string().required(),
+            amount: a.integer(),
+            purchasedAt: a.datetime(),
+        })
+        .identifier(['userId', 'postId'])
         .secondaryIndexes((index) => [
-            index('stripeSessionId'), // Webhook の冪等チェック用
+            index('stripeSessionId')
         ])
         .authorization((allow) => [
-            allow.ownerDefinedIn('userId').to(['read']),
+            allow.ownerDefinedIn('userId').to(['read'])
         ]),
+
     IsTerms: a
         .model({
             ...IsTerms,
@@ -112,6 +129,7 @@ const schema = a.schema({
             index('taxonomy')
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
+
     IsComments: a
         .model({
             ...IsComments,
@@ -120,6 +138,7 @@ const schema = a.schema({
             index('postId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
+
     IsPostsTranslations: a
         .model({
             ...IsPosts,
@@ -131,6 +150,7 @@ const schema = a.schema({
             index('postId')
         ])
         .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
+
     IsTermsTranslations: a
         .model({
             ...IsTerms,
@@ -142,6 +162,7 @@ const schema = a.schema({
             index('lang')
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
+
     IsCommentsTranslations: a
         .model({
             ...IsComments,
@@ -151,6 +172,7 @@ const schema = a.schema({
             index('postId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
+
     IsSns: a
         .model({
             contentText: a.string(),
@@ -176,25 +198,28 @@ const schema = a.schema({
             index('originalPostId').sortKeys(['createdAt'])
         ])
         .authorization((allow) => [allow.guest().to(['read'])]),
+
     IsUsers: a
         .model({
             email: a.string().required(),
             createdAt: a.string().required(),
             plan: a.enum(['free', 'premium']),
-            role: a.enum(['user', 'admin'])
+            role: a.enum(['user', 'admin']),
         })
         .secondaryIndexes((index) => [
             index('email').sortKeys(['role'])
         ])
         .authorization((allow) => [allow.owner()]),
-    IsPostAnalytics: a.model({
-        postId: a.id(),
-        averageEngagementTime: a.integer().required(),
-        pageViews: a.integer().required(),
-        periodStart: a.string().required(),
-        periodEnd: a.string().required(),
-        post: a.belongsTo('IsPosts', 'postId'),
-    })
+
+    IsPostAnalytics: a
+        .model({
+            postId: a.id(),
+            averageEngagementTime: a.integer().required(),
+            pageViews: a.integer().required(),
+            periodStart: a.string().required(),
+            periodEnd: a.string().required(),
+            post: a.belongsTo('IsPosts', 'postId'),
+        })
         .authorization((allow) => [allow.guest().to(['read']), allow.authenticated().to(['read'])]),
 
     IsFunctionPayment: a
@@ -206,10 +231,19 @@ const schema = a.schema({
         .handler(a.handler.function(IsPayment))
         .authorization(allow => [
             allow.authenticated()
-        ])
+        ]),
+
+    IsFunctionGetPaidContent: a
+        .query()
+        .arguments({ postId: a.id().required() })
+        .returns(a.string())
+        .authorization((allow) => [allow.authenticated()])
+        .handler(a.handler.function(IsGetPaidContent)),
 }).authorization((allow) => [
     allow.resource(IsPayment),
     allow.resource(IsWebhook),
+    allow.resource(IsGetPaidContent),
+    allow.resource(IsCreateFile)
 ]);
 
 export type Schema = ClientSchema<typeof schema>;
