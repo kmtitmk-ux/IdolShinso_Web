@@ -1,10 +1,9 @@
 import { Amplify } from 'aws-amplify';
 import { generateClient } from 'aws-amplify/data';
 import { getAmplifyDataClientConfig } from '@aws-amplify/backend/function/runtime';
-import { env } from '$amplify/env/IsGetPaidContent';
 import type { Schema } from '../../data/resource.js';
 
-const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(env as any);
+const { resourceConfig, libraryOptions } = await getAmplifyDataClientConfig(process.env as any);
 Amplify.configure(resourceConfig, libraryOptions);
 
 const client = generateClient<Schema>();
